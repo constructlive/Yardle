@@ -1,24 +1,4 @@
 import { BrandLogo } from "@/components/brand-logo";
-import { PrimaryButton } from "@/components/ui";
-
-export default function LoginPage() {
-  return (
-    <main className="grid min-h-screen place-items-center bg-surface px-4 py-10 text-ink">
-      <section className="w-full max-w-md rounded-2xl border border-slateLine bg-card p-6 shadow-soft">
-        <div className="flex justify-center">
-          <BrandLogo className="h-20 w-64 rounded-3xl" />
-        </div>
-        <form className="mt-8 grid gap-4">
-          <label className="grid gap-2 text-sm font-bold text-secondaryText">Email address<input className="rounded-2xl border border-slateLine bg-sidebar p-4 text-ink outline-none transition focus:border-estate-500" type="email" placeholder="admin@yardle.local" /></label>
-          <label className="grid gap-2 text-sm font-bold text-secondaryText">Password<input className="rounded-2xl border border-slateLine bg-sidebar p-4 text-ink outline-none transition focus:border-estate-500" type="password" placeholder="Password" /></label>
-          <PrimaryButton href="/admin">Sign in</PrimaryButton>
-        </form>
-        <footer className="mt-8 flex justify-center border-t border-slateLine pt-4"><BrandLogo className="h-8 w-28 rounded-xl p-1" /></footer>
-      </section>
-    </main>
-  );
-}
-
-
-
-
+import { loginAdmin } from "@/lib/auth-actions";
+import { LockKeyhole } from "lucide-react";
+export default function LoginPage({searchParams}:{searchParams:{error?:string;next?:string}}){return <main className="grid min-h-screen place-items-center bg-surface px-4 py-10 text-ink"><section className="w-full max-w-md rounded-2xl border border-slateLine bg-card p-6 shadow-soft"><div className="flex justify-center"><BrandLogo className="h-20 w-64 rounded-3xl" /></div><form action={loginAdmin} className="mt-8 grid gap-4"><input type="hidden" name="next" value={searchParams.next??"/admin"}/><label className="grid gap-2 text-sm font-bold text-secondaryText">Email address<input required autoComplete="username" name="email" className="rounded-2xl border border-slateLine bg-sidebar p-4 text-ink outline-none transition focus:border-estate-500" type="email" placeholder="admin@example.com"/></label><label className="grid gap-2 text-sm font-bold text-secondaryText">Password<input required autoComplete="current-password" name="password" className="rounded-2xl border border-slateLine bg-sidebar p-4 text-ink outline-none transition focus:border-estate-500" type="password" placeholder="Password"/></label>{searchParams.error?<p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-400">Email or password is incorrect.</p>:null}<button className="tap-target inline-flex items-center justify-center gap-2 rounded-2xl bg-estate-500 px-5 py-3 text-base font-bold text-[#07110b] shadow-glow transition hover:bg-estate-600"><LockKeyhole className="h-5 w-5"/>Sign in</button></form><footer className="mt-8 flex justify-center border-t border-slateLine pt-4"><BrandLogo className="h-8 w-28 rounded-xl p-1"/></footer></section></main>}

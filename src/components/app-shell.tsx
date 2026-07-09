@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { BrandLogo } from "./brand-logo";
+import { logoutAdmin } from "@/lib/auth-actions";
 import {
   BarChart3,
   Bell,
@@ -15,6 +16,7 @@ import {
   HandCoins,
   Home,
   MessageSquare,
+  LogOut,
   ReceiptText,
   Settings,
   Upload,
@@ -126,10 +128,7 @@ export function AdminShell({ children, demoMode = false }: { children: ReactNode
             <button className="tap-target flex w-12 items-center justify-center rounded-2xl border border-slateLine bg-card text-secondaryText transition hover:bg-hover hover:text-ink" aria-label="Notifications">
               <Bell className="h-5 w-5" />
             </button>
-            <button className="tap-target flex items-center gap-2 rounded-2xl border border-slateLine bg-card px-3 py-2 text-secondaryText transition hover:bg-hover hover:text-ink" aria-label="Profile menu">
-              <UserCircle className="h-6 w-6" />
-              <span className="hidden text-sm font-bold xl:inline">Estate Admin</span>
-            </button>
+            <div className="hidden items-center gap-2 xl:flex"><UserCircle className="h-6 w-6 text-mutedText" /><span className="text-sm font-bold text-secondaryText">Estate Admin</span></div><form action={logoutAdmin}><button className="tap-target flex items-center gap-2 rounded-2xl border border-slateLine bg-card px-3 py-2 font-bold text-secondaryText transition hover:bg-hover hover:text-ink" aria-label="Log out"><LogOut className="h-5 w-5" /><span className="hidden xl:inline">Logout</span></button></form>
           </div>
         </div>
       </header>
