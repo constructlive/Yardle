@@ -1,5 +1,7 @@
 import { PageHeader, PrimaryButton } from "@/components/ui";
 import { saveEstateSettings } from "@/lib/actions";
+import { getSmsTemplates } from "@/lib/sms-templates";
+import { SmsTemplateSettings } from "./sms-template-settings";
 import { getAppData } from "@/lib/data";
 import { Save } from "lucide-react";
 
@@ -8,6 +10,7 @@ const labelClass = "grid gap-2 text-sm font-bold text-secondaryText";
 
 export default async function SettingsPage() {
   const { estate } = await getAppData();
+  const smsTemplates = await getSmsTemplates();
   return (
     <>
       <PageHeader title="Settings" eyebrow="Estate defaults for new billing periods" action={null} />
@@ -23,6 +26,7 @@ export default async function SettingsPage() {
         <label className={`${labelClass} md:col-span-2`}>Address<textarea name="address" className={`${fieldClass} min-h-32`} defaultValue={estate.address} /></label>
         <div className="md:col-span-2"><PrimaryButton><Save className="h-5 w-5" />Save settings</PrimaryButton></div>
       </form>
+          <SmsTemplateSettings templates={smsTemplates} />
     </>
   );
 }

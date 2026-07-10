@@ -123,6 +123,15 @@ export interface Payment {
   createdAt: string;
 }
 
+export interface SmsTemplate {
+  id: string;
+  templateKey: import("./sms-template-definitions").SmsTemplateKey;
+  displayName: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SmsLog {
   id: string;
   billId: string;

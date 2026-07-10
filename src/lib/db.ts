@@ -1,4 +1,5 @@
 import mysql, { type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
+import { DEFAULT_SMS_TEMPLATES } from "./sms-template-definitions";
 
 export type DbRow = RowDataPacket & Record<string, unknown>;
 export type QueryResult<T extends Record<string, unknown> = DbRow> = {
@@ -122,6 +123,21 @@ export async function ensureSeeded() {
   await database.execute(`alter table payments add column if not exists reversed_at datetime after recorded_by, add column if not exists reversed_by char(36) after reversed_at, add column if not exists reversal_reason text after reversed_by`);
   await database.execute(`create index if not exists idx_payments_bill_active on payments (bill_id, reversed_at)`);
   await database.execute(`alter table sms_logs add column if not exists failure_reason text after provider_reference`);
+  await database.execute(`create table if not exists sms_templates (
+    id char(36) primary key,
+    template_key varchar(64) not null unique,
+    display_name varchar(255) not null,
+    body text not null,
+    created_at datetime not null default current_timestamp,
+    updated_at datetime not null default current_timestamp on update current_timestamp
+  ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci`);
+  for (const template of DEFAULT_SMS_TEMPLATES) {
+    await database.execute(
+      `insert into sms_templates (id, template_key, display_name, body) values (?,?,?,?)
+       on duplicate key update display_name=values(display_name)`,
+      [template.id, template.key, template.displayName, template.body]
+    );
+  }
   await database.execute(`create table if not exists historical_import_batches (
     id char(36) primary key,
     estate_id char(36) not null,

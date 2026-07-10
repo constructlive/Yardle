@@ -209,6 +209,14 @@ create table if not exists historical_bills (
   constraint fk_historical_bills_unit foreign key (unit_id) references units(id) on delete cascade,
   constraint chk_historical_bills_paid_status check (paid_status in ('unpaid', 'part_paid', 'paid', 'credited'))
 ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+create table if not exists sms_templates (
+  id char(36) primary key,
+  template_key varchar(64) not null unique,
+  display_name varchar(255) not null,
+  body text not null,
+  created_at datetime not null default current_timestamp,
+  updated_at datetime not null default current_timestamp on update current_timestamp
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
 create table if not exists settings (
   id char(36) primary key,
   setting_key varchar(128) not null unique,
@@ -229,6 +237,7 @@ create index idx_bills_unit_issued on bills (unit_id, issued_at);
 create index idx_payments_unit_date on payments (unit_id, payment_date);
 create index idx_payments_bill on payments (bill_id);
 create index idx_sms_logs_created_at on sms_logs (created_at);
+create index if not exists idx_sms_templates_key on sms_templates (template_key);
 create index idx_historical_bills_unit_period on historical_bills (unit_id, billing_period_start, billing_period_end);
 create index idx_historical_import_batches_uploaded on historical_import_batches (uploaded_at);
 
@@ -236,3 +245,19 @@ create index idx_historical_import_batches_uploaded on historical_import_batches
 alter table payments add column if not exists reversed_at datetime after recorded_by, add column if not exists reversed_by char(36) after reversed_at, add column if not exists reversal_reason text after reversed_by;
 alter table sms_logs add column if not exists failure_reason text after provider_reference;
 create index if not exists idx_payments_bill_active on payments (bill_id, reversed_at);
+create table if not exists sms_templates (
+  id char(36) primary key,
+  template_key varchar(64) not null unique,
+  display_name varchar(255) not null,
+  body text not null,
+  created_at datetime not null default current_timestamp,
+  updated_at datetime not null default current_timestamp on update current_timestamp
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+insert into sms_templates (id, template_key, display_name, body) values
+('00000000-0000-4000-9000-000000000001','welcome','Welcome / Online Bill Access','Welcome to {{estateName}} online bill access for Unit {{unitNumber}}. View your bills here: {{paymentLink}}'),
+('00000000-0000-4000-9000-000000000002','bill_generated','Bill Generated','Your Yardle electricity bill for {{billType}} is ready. Total due: {{amount}}. View it here: {{paymentLink}}'),
+('00000000-0000-4000-9000-000000000003','payment_reminder','Payment Reminder','Reminder: Unit {{unitNumber}} has {{amount}} outstanding for {{billType}}. View your bill here: {{paymentLink}}'),
+('00000000-0000-4000-9000-000000000004','overdue_reminder','Overdue Reminder','Overdue reminder: Unit {{unitNumber}} has {{amount}} outstanding. Please arrange payment as soon as possible. {{paymentLink}}'),
+('00000000-0000-4000-9000-000000000005','payment_received','Payment Received','Thank you. We have received {{amount}} for Unit {{unitNumber}} at {{estateName}}.'),
+('00000000-0000-4000-9000-000000000006','meter_reading_reminder','Meter Reading Reminder','Reminder: please provide your meter reading for Unit {{unitNumber}} at {{estateName}}. {{paymentLink}}')
+on duplicate key update display_name=values(display_name);

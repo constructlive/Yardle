@@ -9,7 +9,7 @@ import { createBillsForPeriod, getAppData } from "./data";
 import { ensureSeeded, hasDatabaseUrl, query, transaction } from "./db";
 import { serializeTenantMeta } from "./tenant-meta";
 import { createTenantAccessToken, getTenantBillUrl } from "./secure-link";
-import { buildBillSms } from "./sms";
+import { renderSmsTemplate, saveSmsTemplate } from "./sms-templates";
 import { sendAndLogSms } from "./sms-logging";
 import { commitHistoricalImport, previewHistoricalImport, type HistoricalImportCommitState, type HistoricalImportPreviewState, type HistoricalImportPreviewRow } from "./historical-import";
 import { requireAdminSession } from "./session";
@@ -287,6 +287,13 @@ export async function reversePayment(input: { paymentId: string; reason?: string
   return response;
 }
 
+export async function saveSmsTemplateUpdate(input: { templateKey: string; body: string }) {
+  await requireAdminSession();
+  const result = await saveSmsTemplate(input);
+  revalidatePath("/admin/settings");
+  return result;
+}
+
 export async function saveSmsLog(formData: FormData) {
   await requireAdminSession();
   const log = await sendAndLogSms({
@@ -317,11 +324,20 @@ export async function saveReminderForBill(billId: string) {
   const unit = data.units.find((item) => item.id === bill.unitId);
   const period = data.billingPeriods.find((item) => item.id === bill.billingPeriodId);
   const amount = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(bill.remainingBalancePence / 100);
+  const paymentLink = unit?.tenantAccessToken ? getTenantBillUrl(unit.tenantAccessToken) : "";
   await sendAndLogSms({
     billId,
     unitId: unit?.id,
     mobile: unit?.tenantMobile || "No mobile",
-    message: `Reminder: your Yardle electricity bill${period ? ` for ${period.name}` : ""} has ${amount} outstanding.`
+    message: await renderSmsTemplate("payment_reminder", {
+      estateName: data.estate.name,
+      tenantName: unit?.tenantName || "Tenant",
+      unitNumber: unit?.unitReference || "-",
+      billType: period?.name || "your current bill",
+      amount,
+      dueDate: period?.endDate || "",
+      paymentLink
+    })
   });
   revalidatePath("/admin/sms");
   revalidatePath("/admin/landlord");
@@ -357,7 +373,15 @@ export async function sendTenantBillLinkSms(formData: FormData) {
     billId: bill.id,
     unitId,
     mobile: unit.tenantMobile || "No mobile",
-    message: buildBillSms(period, bill, getTenantBillUrl(unit.tenantAccessToken))
+    message: await renderSmsTemplate("bill_generated", {
+      estateName: data.estate.name,
+      tenantName: unit.tenantName || "Tenant",
+      unitNumber: unit.unitReference,
+      billType: period.name,
+      amount: new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(bill.roundedTotalPence / 100),
+      dueDate: period.endDate,
+      paymentLink: getTenantBillUrl(unit.tenantAccessToken)
+    })
   });
   revalidatePath("/admin/sms");
   revalidatePath(`/admin/units/${unitId}/edit`);
