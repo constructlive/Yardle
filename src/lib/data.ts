@@ -3,6 +3,7 @@ import { calculateBill } from "./billing";
 import { sendAndLogSms } from "./sms-logging";
 import { renderSmsTemplate } from "./sms-templates";
 import { nextPeriodDetails } from "./period-cycle";
+import { getPaymentInstructions } from "./payment-instructions";
 import { ensureSeeded, hasDatabaseUrl, query, transaction } from "./db";
 import { createDemoBillsForPeriod, getDemoAppData, getDemoBillingPeriodById, getDemoBillById, getDemoUnitByAccessToken, getDemoUnitById } from "./demo-store";
 import { mapBill, mapBillingPeriod, mapEstate, mapMeterReading, mapPayment, mapSmsLog, mapUnit, mapUser } from "./mappers";
@@ -170,6 +171,7 @@ export interface PublicBillData {
   bills: Bill[];
   billingPeriods: BillingPeriod[];
   payments: Payment[];
+  paymentInstructions: string;
 }
 
 export async function getPublicBillData(token: string): Promise<PublicBillData | undefined> {
@@ -186,7 +188,8 @@ export async function getPublicBillData(token: string): Promise<PublicBillData |
       unit,
       bills,
       billingPeriods: data.billingPeriods.filter((period) => periodIds.has(period.id)),
-      payments: data.payments.filter((payment) => payment.unitId === unit.id)
+      payments: data.payments.filter((payment) => payment.unitId === unit.id),
+      paymentInstructions: await getPaymentInstructions()
     };
   }
 
@@ -197,11 +200,12 @@ export async function getPublicBillData(token: string): Promise<PublicBillData |
   );
   if (!unitResult.rows[0]) return undefined;
   const unit = mapUnit(unitResult.rows[0]);
-  const [estateResult, billsResult, periodsResult, paymentsResult] = await Promise.all([
+  const [estateResult, billsResult, periodsResult, paymentsResult, paymentInstructions] = await Promise.all([
     query("select * from estates where id = ? limit 1", [unit.estateId]),
     query("select * from bills where unit_id = ? order by issued_at is null, issued_at desc, created_at desc", [unit.id]),
     query("select bp.* from billing_periods bp join bills b on b.billing_period_id = bp.id where b.unit_id = ? order by bp.start_date desc", [unit.id]),
-    query("select * from payments where unit_id = ? order by payment_date desc, created_at desc", [unit.id])
+    query("select * from payments where unit_id = ? order by payment_date desc, created_at desc", [unit.id]),
+    getPaymentInstructions()
   ]);
   if (!estateResult.rows[0]) return undefined;
   return {
@@ -209,7 +213,8 @@ export async function getPublicBillData(token: string): Promise<PublicBillData |
     unit,
     bills: billsResult.rows.map(mapBill),
     billingPeriods: periodsResult.rows.map(mapBillingPeriod),
-    payments: paymentsResult.rows.map(mapPayment)
+    payments: paymentsResult.rows.map(mapPayment),
+    paymentInstructions
   };
 }
 

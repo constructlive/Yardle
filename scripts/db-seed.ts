@@ -21,7 +21,8 @@ function getDefaultSettings() {
     ["app.name", "Yardle"],
     ["app.tagline", "Smart Estate Management"],
     ["sms.provider", process.env.SMS_PROVIDER || "mock"],
-    ["billing.currency", "GBP"]
+    ["billing.currency", "GBP"],
+    ["payment.instructions", "Please pay by bank transfer using Unit {{unitNumber}} as your payment reference.\n\nFor payment queries contact {{estateName}}."]
   ] as const;
 }
 

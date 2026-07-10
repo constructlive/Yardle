@@ -1,12 +1,39 @@
-import { formatMoney, formatNumber } from "./money";
+﻿import { formatMoney, formatNumber } from "./money";
+import { DEFAULT_PAYMENT_INSTRUCTIONS, renderPaymentInstructions } from "./payment-instructions";
 import type { Bill, BillingPeriod, Estate, Unit } from "./types";
 
-export function generateBillHtml(estate: Estate, unit: Unit, period: BillingPeriod, bill: Bill): string {
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function paragraphs(value: string) {
+  return value
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
+    .join("\n  ");
+}
+
+export function generateBillHtml(estate: Estate, unit: Unit, period: BillingPeriod, bill: Bill, paymentInstructions = DEFAULT_PAYMENT_INSTRUCTIONS): string {
+  const renderedPaymentInstructions = renderPaymentInstructions(paymentInstructions, {
+    estateName: estate.name,
+    tenantName: unit.tenantName || "Tenant",
+    unitNumber: unit.unitReference,
+    amount: formatMoney(bill.remainingBalancePence),
+    paymentLink: ""
+  });
+
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Yardle bill ${unit.unitReference}</title>
+  <title>Yardle bill ${escapeHtml(unit.unitReference)}</title>
   <style>
     body { font-family: Arial, sans-serif; color: #17212b; margin: 40px; }
     header { display: flex; justify-content: space-between; border-bottom: 2px solid #16846f; padding-bottom: 20px; }
@@ -14,21 +41,24 @@ export function generateBillHtml(estate: Estate, unit: Unit, period: BillingPeri
     table { width: 100%; border-collapse: collapse; margin-top: 28px; }
     td, th { padding: 12px; border-bottom: 1px solid #d8e0e6; text-align: left; }
     .total { font-size: 22px; font-weight: 700; color: #0f6f5f; }
+    .instructions { margin-top: 28px; padding: 16px; border: 1px solid #d8e0e6; border-radius: 10px; }
+    .instructions h2 { margin: 0 0 10px; font-size: 18px; }
+    .instructions p { margin: 6px 0; line-height: 1.5; }
   </style>
 </head>
 <body>
   <header>
     <div>
       <h1>Yardle</h1>
-      <p>${estate.name}<br />${estate.address}</p>
+      <p>${escapeHtml(estate.name)}<br />${escapeHtml(estate.address)}</p>
     </div>
     <div>
       <strong>Electricity bill</strong><br />
       Issued ${bill.issuedAt ? new Date(bill.issuedAt).toLocaleDateString("en-GB") : "Draft"}
     </div>
   </header>
-  <h2>${unit.tenantName} - Unit ${unit.unitReference}</h2>
-  <p>Billing period: ${period.name}</p>
+  <h2>${escapeHtml(unit.tenantName)} - Unit ${escapeHtml(unit.unitReference)}</h2>
+  <p>Billing period: ${escapeHtml(period.name)}</p>
   <table>
     <tbody>
       <tr><th>Previous reading</th><td>${formatNumber(bill.previousReading)}</td></tr>
@@ -41,10 +71,12 @@ export function generateBillHtml(estate: Estate, unit: Unit, period: BillingPeri
       <tr><th>Total due</th><td class="total">${formatMoney(bill.roundedTotalPence)}</td></tr>
     </tbody>
   </table>
-  <p>Please pay by bank transfer using your unit reference. Contact ${estate.contactEmail} for support.</p>
-  <p>${bill.adminNotes ?? ""}</p>
+  <section class="instructions">
+    <h2>Payment instructions</h2>
+    ${paragraphs(renderedPaymentInstructions)}
+    <p>Contact ${escapeHtml(estate.contactEmail)} for support.</p>
+  </section>
+  <p>${escapeHtml(bill.adminNotes ?? "")}</p>
 </body>
 </html>`;
 }
-
-

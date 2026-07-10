@@ -10,6 +10,7 @@ import { ensureSeeded, hasDatabaseUrl, query, transaction } from "./db";
 import { serializeTenantMeta } from "./tenant-meta";
 import { createTenantAccessToken, getTenantBillUrl } from "./secure-link";
 import { renderSmsTemplate, saveSmsTemplate } from "./sms-templates";
+import { savePaymentInstructions } from "./payment-instructions";
 import { sendAndLogSms } from "./sms-logging";
 import { commitHistoricalImport, previewHistoricalImport, type HistoricalImportCommitState, type HistoricalImportPreviewState, type HistoricalImportPreviewRow } from "./historical-import";
 import { requireAdminSession } from "./session";
@@ -88,6 +89,12 @@ export async function saveEstateSettings(formData: FormData) {
   revalidatePath("/admin/settings");
 }
 
+export async function savePaymentInstructionsAction(formData: FormData) {
+  await requireAdminSession();
+  await savePaymentInstructions(text(formData.get("paymentInstructions")));
+  revalidatePath("/admin/settings");
+  revalidatePath("/bill");
+}
 export async function saveUnit(formData: FormData) {
   await requireAdminSession();
   await ensureSeeded();
