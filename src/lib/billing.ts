@@ -25,7 +25,7 @@ export function calculateBill(input: BillInput): Bill {
   const subtotalPence = usageCostPence + (input.unit.freeSupplyMeter ? 0 : standingCharge) + input.period.levyPence;
   const outstandingCarriedForwardPence = input.outstandingOverridePence ?? input.unit.currentBalancePence;
   const totalDuePence = subtotalPence + outstandingCarriedForwardPence;
-  const roundedTotalPence = Math.round(totalDuePence);
+  const roundedTotalPence = Math.round(totalDuePence / 100) * 100;
 
   return {
     id: `bill-${input.period.id}-${input.unit.id}`,
