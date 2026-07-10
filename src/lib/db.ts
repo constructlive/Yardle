@@ -55,6 +55,15 @@ export function getPool() {
   return pool;
 }
 
+export async function closePool() {
+  if (!pool) {
+    return;
+  }
+  await pool.end();
+  pool = undefined;
+  schemaChecked = false;
+}
+
 function wrapResult<T extends Record<string, unknown>>(result: unknown): QueryResult<T> {
   if (Array.isArray(result)) {
     return { rows: result as T[] };
