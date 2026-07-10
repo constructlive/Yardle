@@ -135,6 +135,7 @@ create table sms_logs (
   status sms_status not null,
   provider text not null,
   provider_reference text,
+  failure_reason text,
   sent_at timestamptz,
   created_at timestamptz not null default now()
 );

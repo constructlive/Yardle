@@ -131,6 +131,7 @@ export function mapSmsLog(row: any): SmsLog {
     status: row.status,
     provider: row.provider,
     providerReference: row.provider_reference ?? "",
+    failureReason: row.failure_reason ?? undefined,
     sentAt: row.sent_at ? row.sent_at?.toISOString?.() ?? String(row.sent_at) : undefined,
     createdAt: row.created_at?.toISOString?.() ?? String(row.created_at)
   };

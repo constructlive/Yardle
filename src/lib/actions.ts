@@ -9,8 +9,9 @@ import { ensureSeeded, hasDatabaseUrl, query, transaction } from "./db";
 import { serializeTenantMeta } from "./tenant-meta";
 import { createTenantAccessToken, getTenantBillUrl } from "./secure-link";
 import { buildBillSms } from "./sms";
+import { sendAndLogSms } from "./sms-logging";
 import { requireAdminSession } from "./session";
-import { addDemoSmsLog, archiveDemoUnit, regenerateDemoTenantAccessToken, saveDemoBillingPeriod, saveDemoEstate, saveDemoMeterReading, saveDemoPaymentUpdate, saveDemoUnit } from "./demo-store";
+import { archiveDemoUnit, regenerateDemoTenantAccessToken, saveDemoBillingPeriod, saveDemoEstate, saveDemoMeterReading, saveDemoPaymentUpdate, saveDemoUnit } from "./demo-store";
 
 function text(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
@@ -191,44 +192,40 @@ export async function savePaymentUpdate(input: { billId: string; amountPaidPence
 
 export async function saveSmsLog(formData: FormData) {
   await requireAdminSession();
-  if (!hasDatabaseUrl()) {
-    addDemoSmsLog({ billId: text(formData.get("billId")) || undefined, unitId: text(formData.get("unitId")) || undefined, mobile: text(formData.get("mobile")), message: text(formData.get("message")), status: (text(formData.get("status")) || "simulated") as any, provider: text(formData.get("provider")) || "mock", providerReference: text(formData.get("providerReference")) || `mock-${Date.now()}` });
-    revalidatePath("/admin/sms");
-    return;
-  }
-  await ensureSeeded();
-  await query(
-    `insert into sms_logs (id, bill_id, unit_id, mobile, message, status, provider, provider_reference, sent_at) values (?,?,?,?,?,?,?,?,utc_timestamp())`,
-    [randomUUID(), text(formData.get("billId")) || null, text(formData.get("unitId")) || null, text(formData.get("mobile")), text(formData.get("message")), text(formData.get("status")) || "simulated", text(formData.get("provider")) || "mock", text(formData.get("providerReference")) || `mock-${Date.now()}`]
-  );
+  const log = await sendAndLogSms({
+    billId: text(formData.get("billId")) || undefined,
+    unitId: text(formData.get("unitId")) || undefined,
+    mobile: text(formData.get("mobile")),
+    message: text(formData.get("message")) || "Yardle test SMS"
+  });
   revalidatePath("/admin/sms");
+  return {
+    ok: log.status !== "failed",
+    status: log.status,
+    provider: log.provider,
+    providerReference: log.providerReference,
+    failureReason: log.failureReason ?? "",
+    recipient: log.mobile
+  };
 }
 
+export async function sendTestSms(_previousState: unknown, formData: FormData) {
+  return saveSmsLog(formData);
+}
 export async function saveReminderForBill(billId: string) {
   await requireAdminSession();
-  if (!hasDatabaseUrl()) {
-    addDemoSmsLog({ billId, mobile: "No mobile", message: "Reminder: your Yardle electricity bill has an outstanding balance.", provider: "mock" });
-    revalidatePath("/admin/sms");
-    revalidatePath("/admin/landlord");
-    return;
-  }
-  await ensureSeeded();
-  const result = await query(
-    `select b.id as bill_id, b.rounded_total_pence, b.remaining_balance_pence, u.id as unit_id, u.tenant_mobile, bp.name as period_name
-     from bills b
-     join units u on u.id = b.unit_id
-     join billing_periods bp on bp.id = b.billing_period_id
-     where b.id = ?`,
-    [billId]
-  );
-  const row = result.rows[0];
-  if (!row || row.remaining_balance_pence <= 0) return;
-  const amount = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(row.remaining_balance_pence / 100);
-  await query(
-    `insert into sms_logs (id, bill_id, unit_id, mobile, message, status, provider, provider_reference, sent_at)
-     values (?,?,?,?,?,'simulated','mock',?,utc_timestamp())`,
-    [randomUUID(), row.bill_id, row.unit_id, row.tenant_mobile || "No mobile", `Reminder: your Yardle electricity bill for ${row.period_name} has ${amount} outstanding.`, `mock-${Date.now()}`]
-  );
+  const data = await getAppData();
+  const bill = data.bills.find((item) => item.id === billId);
+  if (!bill || bill.remainingBalancePence <= 0) return;
+  const unit = data.units.find((item) => item.id === bill.unitId);
+  const period = data.billingPeriods.find((item) => item.id === bill.billingPeriodId);
+  const amount = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(bill.remainingBalancePence / 100);
+  await sendAndLogSms({
+    billId,
+    unitId: unit?.id,
+    mobile: unit?.tenantMobile || "No mobile",
+    message: `Reminder: your Yardle electricity bill${period ? ` for ${period.name}` : ""} has ${amount} outstanding.`
+  });
   revalidatePath("/admin/sms");
   revalidatePath("/admin/landlord");
 }
@@ -253,41 +250,18 @@ export async function regenerateTenantBillLink(formData: FormData) {
 export async function sendTenantBillLinkSms(formData: FormData) {
   await requireAdminSession();
   const unitId = text(formData.get("unitId"));
-  if (!hasDatabaseUrl()) {
-    const data = await getAppData();
-    const unit = data.units.find((item) => item.id === unitId);
-    const bill = data.bills.find((item) => item.unitId === unitId);
-    const period = bill ? data.billingPeriods.find((item) => item.id === bill.billingPeriodId) : undefined;
-    if (!unit?.tenantAccessEnabled || !unit.tenantAccessToken || !bill || !period) return;
-    addDemoSmsLog({
-      billId: bill.id,
-      unitId,
-      mobile: unit.tenantMobile || "No mobile",
-      message: buildBillSms(period, bill, getTenantBillUrl(unit.tenantAccessToken)),
-      provider: "mock"
-    });
-  } else {
-    await ensureSeeded();
-    const result = await query(
-      `select u.id as unit_id, u.tenant_mobile, u.tenant_access_token, u.tenant_access_enabled,
-              b.id as bill_id, b.rounded_total_pence, bp.name as period_name
-       from units u
-       join bills b on b.unit_id = u.id
-       join billing_periods bp on bp.id = b.billing_period_id
-       where u.id = ?
-       order by b.issued_at is null, b.issued_at desc, b.created_at desc
-       limit 1`,
-      [unitId]
-    );
-    const row = result.rows[0];
-    if (!row?.tenant_access_enabled || !row.tenant_access_token) return;
-    const message = `Your Yardle electricity bill for ${row.period_name} is ready. Total due: ${new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(row.rounded_total_pence / 100)}. View it here: ${getTenantBillUrl(row.tenant_access_token)}`;
-    await query(
-      `insert into sms_logs (id, bill_id, unit_id, mobile, message, status, provider, provider_reference, sent_at)
-       values (?,?,?,?,?,'simulated','mock',?,utc_timestamp())`,
-      [randomUUID(), row.bill_id, row.unit_id, row.tenant_mobile || "No mobile", message, `mock-${Date.now()}`]
-    );
-  }
+  const data = await getAppData();
+  const unit = data.units.find((item) => item.id === unitId);
+  const bill = data.bills.find((item) => item.unitId === unitId);
+  const period = bill ? data.billingPeriods.find((item) => item.id === bill.billingPeriodId) : undefined;
+  if (!unit?.tenantAccessEnabled || !unit.tenantAccessToken || !bill || !period) return;
+
+  await sendAndLogSms({
+    billId: bill.id,
+    unitId,
+    mobile: unit.tenantMobile || "No mobile",
+    message: buildBillSms(period, bill, getTenantBillUrl(unit.tenantAccessToken))
+  });
   revalidatePath("/admin/sms");
   revalidatePath(`/admin/units/${unitId}/edit`);
 }

@@ -119,6 +119,7 @@ export async function ensureSeeded() {
     modify tenant_access_token varchar(128) not null,
     modify tenant_access_token_created_at datetime not null default current_timestamp,
     modify tenant_access_enabled tinyint(1) not null default 0`);
+  await database.execute(`alter table sms_logs add column if not exists failure_reason text after provider_reference`);
   await database.execute(`create unique index if not exists idx_units_tenant_access_token on units (tenant_access_token)`);
   schemaChecked = true;
 }

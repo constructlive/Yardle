@@ -147,6 +147,7 @@ create table if not exists sms_logs (
   status varchar(32) not null,
   provider varchar(64) not null,
   provider_reference varchar(255),
+  failure_reason text,
   sent_at datetime,
   created_at datetime not null default current_timestamp,
   constraint fk_sms_logs_bill foreign key (bill_id) references bills(id) on delete set null,

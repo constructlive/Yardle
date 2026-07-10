@@ -129,6 +129,7 @@ export interface SmsLog {
   status: SmsStatus;
   provider: string;
   providerReference: string;
+  failureReason?: string;
   sentAt?: string;
   createdAt: string;
 }

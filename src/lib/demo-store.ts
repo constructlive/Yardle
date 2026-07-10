@@ -217,7 +217,7 @@ export function saveDemoPaymentUpdate(input: { billId: string; amountPaidPence: 
   }
 }
 
-export function addDemoSmsLog(input: { billId?: string; unitId?: string; mobile: string; message: string; status?: "queued" | "sent" | "failed" | "simulated"; provider?: string; providerReference?: string }) {
+export function addDemoSmsLog(input: { billId?: string; unitId?: string; mobile: string; message: string; status?: "queued" | "sent" | "failed" | "simulated"; provider?: string; providerReference?: string; failureReason?: string }) {
   demoData.smsLogs.unshift({
     id: `demo-sms-${Date.now()}`,
     billId: input.billId ?? "",
@@ -227,6 +227,7 @@ export function addDemoSmsLog(input: { billId?: string; unitId?: string; mobile:
     status: input.status ?? "simulated",
     provider: input.provider ?? "mock",
     providerReference: input.providerReference ?? `mock-${Date.now()}`,
+    failureReason: input.failureReason,
     sentAt: new Date().toISOString(),
     createdAt: new Date().toISOString()
   });

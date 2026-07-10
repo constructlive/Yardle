@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { calculateBill } from "./billing";
-import { getTenantBillUrl } from "./secure-link";
-import { buildBillSms } from "./sms";
+import { sendAndLogSms } from "./sms-logging";
 import { nextPeriodDetails } from "./period-cycle";
 import { ensureSeeded, hasDatabaseUrl, query, transaction } from "./db";
 import { createDemoBillsForPeriod, getDemoAppData, getDemoBillingPeriodById, getDemoBillById, getDemoUnitByAccessToken, getDemoUnitById } from "./demo-store";
@@ -137,8 +136,15 @@ export async function createBillsForPeriod(periodId: string) {
       );
       if (unit.tenantAccessEnabled && unit.tenantAccessToken && unit.tenantMobile) {
         const billRow = await client.query<{ id: string }>("select id from bills where billing_period_id = ? and unit_id = ? limit 1", [period.id, unit.id]);
-        const message = buildBillSms(period, bill, getTenantBillUrl(unit.tenantAccessToken));
-        await client.query(`insert into sms_logs (id, bill_id, unit_id, mobile, message, status, provider, provider_reference, sent_at) values (?,?,?,?,?,'simulated','mock',?,utc_timestamp())`, [randomUUID(), billRow.rows[0]?.id ?? billId, unit.id, unit.tenantMobile, message, `mock-${Date.now()}`]);
+        await sendAndLogSms(
+          {
+            billId: billRow.rows[0]?.id ?? billId,
+            unitId: unit.id,
+            mobile: unit.tenantMobile,
+            message: `Your Yardle electricity bill for ${period.name} is ready. Total due: ${new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(bill.roundedTotalPence / 100)}. View it here: ${(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")}/bill/${unit.tenantAccessToken}`
+          },
+          client
+        );
       }
     }
     await client.query("update billing_periods set status = 'locked', issued_at = utc_timestamp() where id = ?", [periodId]);

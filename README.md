@@ -8,7 +8,7 @@ Yardle is a standalone tablet-first estate management and electricity billing ap
 - Tailwind CSS
 - MariaDB/MySQL persistence through `mysql2`
 - Role-based admin authentication scaffolding for around 3 administrators
-- Mock SMS provider with interfaces for Twilio, Vonage, and Textlocal
+- Mock SMS provider and production Twilio SMS sending
 - PDF-ready bill HTML generator
 
 ## Run locally
@@ -54,7 +54,7 @@ Copy `.env.example` to `.env.local` and fill in provider credentials as needed. 
 DATABASE_URL=mysql://yardle_user:CHANGE_ME@127.0.0.1:3306/yardle
 ```
 
-`SMS_PROVIDER=mock` logs simulated SMS messages for local development.
+`SMS_PROVIDER=mock` logs simulated SMS messages for local development. Set `SMS_PROVIDER=twilio` in production to send through Twilio. Configure `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`, and `NEXT_PUBLIC_APP_URL=https://yardle.andersonyard.co.uk`. Yardle normalises UK mobile numbers before sending and records provider status, Twilio SID, sent time, and safe failure messages in the SMS log.
 
 ## MVP scope
 
@@ -73,7 +73,7 @@ Implemented pages:
 - Passwordless online bill access
 - CSV import placeholder
 
-Next production steps are adding server-side PDF rendering/storage and a real SMS/email provider adapter.
+Next production steps include adding server-side PDF rendering/storage and any extra email provider adapter required later.
 
 ## Persistent database
 
