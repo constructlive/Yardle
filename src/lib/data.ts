@@ -17,6 +17,7 @@ export interface AppData {
   bills: Bill[];
   payments: Payment[];
   smsLogs: SmsLog[];
+  setupError?: string;
 }
 
 export async function getAppData(): Promise<AppData> {
@@ -35,18 +36,30 @@ export async function getAppData(): Promise<AppData> {
     query("select * from payments order by payment_date desc, created_at desc"),
     query("select * from sms_logs order by created_at desc")
   ]);
-  if (!estates.rows[0]) {
-    throw new Error("No estate found after seed. Check database/mariadb-schema.sql and DATABASE_URL.");
-  }
+  const setupError = estates.rows[0] ? undefined : "No estate record found. Run npm run db:seed or create the estate setup record before using Yardle.";
+  const fallbackEstate: Estate = {
+    id: "setup-required",
+    name: "Yardle setup required",
+    address: "",
+    contactEmail: "",
+    contactPhone: "",
+    defaultKwhRatePence: 0,
+    defaultStandingChargePence: 0,
+    defaultLevyPence: 0,
+    currency: "GBP",
+    smsSenderName: "Yardle",
+    createdAt: new Date().toISOString()
+  };
   return {
     users: users.rows.map(mapUser),
-    estate: mapEstate(estates.rows[0]),
+    estate: estates.rows[0] ? mapEstate(estates.rows[0]) : fallbackEstate,
     units: units.rows.map(mapUnit),
     billingPeriods: periods.rows.map(mapBillingPeriod),
     meterReadings: readings.rows.map(mapMeterReading),
     bills: bills.rows.map(mapBill),
     payments: payments.rows.map(mapPayment),
-    smsLogs: smsLogs.rows.map(mapSmsLog)
+    smsLogs: smsLogs.rows.map(mapSmsLog),
+    setupError
   };
 }
 
