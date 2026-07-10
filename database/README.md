@@ -22,8 +22,8 @@ Preferred:
 ```bash
 DATABASE_URL=mysql://yardle_user:CHANGE_ME@127.0.0.1:3306/yardle
 AUTH_SECRET=CHANGE_ME
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=replace-with-a-long-random-password
+AUTH_TRUST_HOST=true
+NEXTAUTH_URL=https://yardle.andersonyard.co.uk
 ```
 
 You can also use `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` instead of `DATABASE_URL`.
@@ -52,7 +52,7 @@ Run it after `db:setup` when the database needs the initial Yardle estate/settin
 npm run create-admin
 ```
 
-The script prompts for name, email, password, and role, hashes the password with bcrypt, and inserts or updates the admin user safely.
+The script prompts for name, email, password, and role, hashes the password with bcrypt, and inserts the admin user safely. Admin login validates against this database user; no hard-coded default account is used.
 
 ## Notes
 

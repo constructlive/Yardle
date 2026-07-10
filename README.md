@@ -73,7 +73,7 @@ Implemented pages:
 - Passwordless online bill access
 - CSV import placeholder
 
-Next production steps are hardening database-backed auth/session handling, adding server-side PDF rendering/storage and a real SMS/email provider adapter.
+Next production steps are adding server-side PDF rendering/storage and a real SMS/email provider adapter.
 
 ## Persistent database
 

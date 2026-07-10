@@ -9,6 +9,7 @@ import { ensureSeeded, hasDatabaseUrl, query, transaction } from "./db";
 import { serializeTenantMeta } from "./tenant-meta";
 import { createTenantAccessToken, getTenantBillUrl } from "./secure-link";
 import { buildBillSms } from "./sms";
+import { requireAdminSession } from "./session";
 import { addDemoSmsLog, archiveDemoUnit, regenerateDemoTenantAccessToken, saveDemoBillingPeriod, saveDemoEstate, saveDemoMeterReading, saveDemoPaymentUpdate, saveDemoUnit } from "./demo-store";
 
 function text(value: FormDataEntryValue | null) {
@@ -30,6 +31,7 @@ function numberValue(value: FormDataEntryValue | null) {
 }
 
 export async function saveEstateSettings(formData: FormData) {
+  await requireAdminSession();
   if (!hasDatabaseUrl()) {
     saveDemoEstate({ name: text(formData.get("name")), contactEmail: text(formData.get("contactEmail")), contactPhone: text(formData.get("contactPhone")), smsSenderName: text(formData.get("smsSenderName")), defaultKwhRatePence: pence(formData.get("defaultKwhRate")) ?? 0, defaultStandingChargePence: pence(formData.get("defaultStandingCharge")) ?? 0, defaultLevyPence: pence(formData.get("defaultLevy")) ?? 0, address: text(formData.get("address")) });
     revalidatePath("/admin/settings");
@@ -44,6 +46,7 @@ export async function saveEstateSettings(formData: FormData) {
 }
 
 export async function saveUnit(formData: FormData) {
+  await requireAdminSession();
   await ensureSeeded();
   const unitId = text(formData.get("unitId"));
   const estateId = text(formData.get("estateId"));
@@ -90,6 +93,7 @@ export async function saveUnit(formData: FormData) {
 }
 
 export async function archiveUnit(formData: FormData) {
+  await requireAdminSession();
   if (!hasDatabaseUrl()) {
     archiveDemoUnit(text(formData.get("unitId")));
     revalidatePath("/admin/units");
@@ -101,6 +105,7 @@ export async function archiveUnit(formData: FormData) {
 }
 
 export async function saveBillingPeriod(formData: FormData) {
+  await requireAdminSession();
   const periodId = text(formData.get("periodId"));
   const estateId = text(formData.get("estateId"));
   const params = [text(formData.get("name")), text(formData.get("startDate")), text(formData.get("endDate")), pence(formData.get("kwhRate")) ?? 0, pence(formData.get("standingCharge")) ?? 0, pence(formData.get("levy")) ?? 0];
@@ -119,6 +124,7 @@ export async function saveBillingPeriod(formData: FormData) {
 }
 
 export async function saveMeterReading(formData: FormData) {
+  await requireAdminSession();
   const previous = numberValue(formData.get("previousReading"));
   const current = numberValue(formData.get("currentReading"));
   if (!hasDatabaseUrl()) {
@@ -140,6 +146,7 @@ export async function saveMeterReading(formData: FormData) {
 }
 
 export async function issueBills(formData: FormData) {
+  await requireAdminSession();
   await createBillsForPeriod(text(formData.get("periodId")));
   revalidatePath("/admin/bills");
   revalidatePath("/admin/bills/review");
@@ -150,6 +157,7 @@ export async function issueBills(formData: FormData) {
 }
 
 export async function savePaymentUpdate(input: { billId: string; amountPaidPence: number; paymentMethod: string; paymentDate: string; notes: string }) {
+  await requireAdminSession();
   if (!hasDatabaseUrl()) {
     saveDemoPaymentUpdate(input);
     revalidatePath("/admin/payments");
@@ -182,6 +190,7 @@ export async function savePaymentUpdate(input: { billId: string; amountPaidPence
 }
 
 export async function saveSmsLog(formData: FormData) {
+  await requireAdminSession();
   if (!hasDatabaseUrl()) {
     addDemoSmsLog({ billId: text(formData.get("billId")) || undefined, unitId: text(formData.get("unitId")) || undefined, mobile: text(formData.get("mobile")), message: text(formData.get("message")), status: (text(formData.get("status")) || "simulated") as any, provider: text(formData.get("provider")) || "mock", providerReference: text(formData.get("providerReference")) || `mock-${Date.now()}` });
     revalidatePath("/admin/sms");
@@ -196,6 +205,7 @@ export async function saveSmsLog(formData: FormData) {
 }
 
 export async function saveReminderForBill(billId: string) {
+  await requireAdminSession();
   if (!hasDatabaseUrl()) {
     addDemoSmsLog({ billId, mobile: "No mobile", message: "Reminder: your Yardle electricity bill has an outstanding balance.", provider: "mock" });
     revalidatePath("/admin/sms");
@@ -223,6 +233,7 @@ export async function saveReminderForBill(billId: string) {
   revalidatePath("/admin/landlord");
 }
 export async function regenerateTenantBillLink(formData: FormData) {
+  await requireAdminSession();
   const unitId = text(formData.get("unitId"));
   const token = createTenantAccessToken();
   if (!hasDatabaseUrl()) {
@@ -240,6 +251,7 @@ export async function regenerateTenantBillLink(formData: FormData) {
 }
 
 export async function sendTenantBillLinkSms(formData: FormData) {
+  await requireAdminSession();
   const unitId = text(formData.get("unitId"));
   if (!hasDatabaseUrl()) {
     const data = await getAppData();

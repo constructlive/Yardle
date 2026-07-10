@@ -1,9 +1,79 @@
 "use server";
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+
+import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-const sessionCookie="yardle_admin_session"; const sessionDurationMs=12*60*60*1000;
-function secureEqual(input:string,expected:string){return timingSafeEqual(createHash("sha256").update(input).digest(),createHash("sha256").update(expected).digest());}
-function safeDestination(value:FormDataEntryValue|null){const destination=String(value??"/admin");return destination.startsWith("/admin")&&!destination.startsWith("//")?destination:"/admin";}
-export async function loginAdmin(formData:FormData){const configuredEmail=process.env.ADMIN_EMAIL;const configuredPassword=process.env.ADMIN_PASSWORD;const email=String(formData.get("email")??"").trim().toLowerCase();const password=String(formData.get("password")??"");const destination=safeDestination(formData.get("next"));if(!configuredEmail||!configuredPassword||!secureEqual(email,configuredEmail.trim().toLowerCase())||!secureEqual(password,configuredPassword)){redirect(`/login?${new URLSearchParams({error:"invalid",next:destination})}`);}const payload=Buffer.from(JSON.stringify({email,exp:Date.now()+sessionDurationMs}),"utf8").toString("base64url");const secret=process.env.AUTH_SECRET||configuredPassword;const signature=createHmac("sha256",secret).update(payload).digest("base64url");cookies().set(sessionCookie,`${payload}.${signature}`,{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"lax",path:"/",maxAge:sessionDurationMs/1000});redirect(destination);}
-export async function logoutAdmin(){cookies().set(sessionCookie,"",{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"lax",path:"/",maxAge:0});redirect("/login");}
+import { hasDatabaseUrl, query } from "./db";
+import { adminSessionCookie, adminSessionDurationSeconds, createAdminSessionCookie } from "./session";
+import type { Role } from "./types";
+
+const adminRoles = new Set<Role>(["super_admin", "landlord_admin", "admin"]);
+
+type UserRow = {
+  id: string;
+  email: string;
+  role: Role;
+  password_hash: string | null;
+};
+
+function safeDestination(value: FormDataEntryValue | null) {
+  const destination = String(value ?? "/admin");
+  if (destination === "/") return "/admin";
+  return destination.startsWith("/") && !destination.startsWith("//") && destination !== "/login" ? destination : "/admin";
+}
+
+function loginRedirect(error: string, destination: string): never {
+  redirect(`/login?${new URLSearchParams({ error, next: destination })}`);
+}
+
+export async function loginAdmin(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const destination = safeDestination(formData.get("next"));
+
+  if (!process.env.AUTH_SECRET) {
+    loginRedirect("config", destination);
+  }
+  if (!hasDatabaseUrl()) {
+    loginRedirect("config", destination);
+  }
+  if (!email || !password) {
+    loginRedirect("invalid", destination);
+  }
+
+  const result = await query<UserRow>(
+    "select id, email, role, password_hash from users where lower(email) = ? limit 1",
+    [email]
+  );
+  const user = result.rows[0];
+  if (!user?.password_hash || !adminRoles.has(user.role)) {
+    loginRedirect("invalid", destination);
+  }
+
+  const validPassword = await bcrypt.compare(password, user.password_hash);
+  if (!validPassword) {
+    loginRedirect("invalid", destination);
+  }
+
+  const sessionValue = createAdminSessionCookie({ userId: user.id, email: user.email.toLowerCase(), role: user.role });
+  cookies().set(adminSessionCookie, sessionValue, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: adminSessionDurationSeconds
+  });
+
+  redirect(destination);
+}
+
+export async function logoutAdmin() {
+  cookies().set(adminSessionCookie, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0
+  });
+  redirect("/login");
+}
