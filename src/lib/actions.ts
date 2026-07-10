@@ -360,29 +360,35 @@ export async function regenerateTenantBillLink(formData: FormData) {
   revalidatePath("/admin/units");
 }
 
-export async function sendTenantBillLinkSms(formData: FormData) {
+export async function sendTenantBillLinkSms(input: FormData | string) {
   await requireAdminSession();
-  const unitId = text(formData.get("unitId"));
+  const unitId = typeof input === "string" ? input : text(input.get("unitId"));
   const data = await getAppData();
   const unit = data.units.find((item) => item.id === unitId);
+  if (!unit) return { ok: false, message: "Unit not found." };
+  if (!unit.tenantAccessEnabled || !unit.tenantAccessToken) return { ok: false, message: "Online Bill Access is not enabled for this unit." };
+  if (!unit.tenantMobile) return { ok: false, message: "No mobile number is saved for this tenant." };
+
   const bill = data.bills.find((item) => item.unitId === unitId);
   const period = bill ? data.billingPeriods.find((item) => item.id === bill.billingPeriodId) : undefined;
-  if (!unit?.tenantAccessEnabled || !unit.tenantAccessToken || !bill || !period) return;
-
-  await sendAndLogSms({
-    billId: bill.id,
+  const log = await sendAndLogSms({
+    billId: bill?.id,
     unitId,
-    mobile: unit.tenantMobile || "No mobile",
-    message: await renderSmsTemplate("bill_generated", {
+    mobile: unit.tenantMobile,
+    message: await renderSmsTemplate("welcome", {
       estateName: data.estate.name,
       tenantName: unit.tenantName || "Tenant",
       unitNumber: unit.unitReference,
-      billType: period.name,
-      amount: new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(bill.roundedTotalPence / 100),
-      dueDate: period.endDate,
+      billType: period?.name || "Online Bill Access",
+      amount: bill ? new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(bill.roundedTotalPence / 100) : "",
+      dueDate: period?.endDate || "",
       paymentLink: getTenantBillUrl(unit.tenantAccessToken)
     })
   });
   revalidatePath("/admin/sms");
   revalidatePath(`/admin/units/${unitId}/edit`);
+  return {
+    ok: log.status !== "failed",
+    message: log.status === "failed" ? `SMS failed: ${log.failureReason || "provider rejected the message."}` : `SMS ${log.status === "simulated" ? "simulated" : "sent"} to ${log.mobile}.`
+  };
 }

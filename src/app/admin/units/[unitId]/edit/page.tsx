@@ -55,7 +55,7 @@ export default async function EditTenantPage({ params }: { params: { unitId: str
           <h2 className="text-2xl font-black text-ink">Online Bill Access</h2>
           <p className="mt-2 text-secondaryText">Passwordless access to this business's bills using one secure link.</p>
           <label className="mt-5 inline-flex min-h-16 items-center gap-3 rounded-2xl border border-slateLine bg-sidebar px-5 font-black text-ink"><input type="checkbox" name="tenantAccessEnabled" defaultChecked={unit.tenantAccessEnabled} className="h-6 w-6 accent-estate-500" />Online Bill Access enabled</label>
-          <div className="mt-5"><SecureBillLinkControls secureUrl={getTenantBillUrl(unit.tenantAccessToken)} enabled={unit.tenantAccessEnabled} email={unit.tenantEmail} /></div>
+          <div className="mt-5"><SecureBillLinkControls unitId={unit.id} secureUrl={getTenantBillUrl(unit.tenantAccessToken)} enabled={unit.tenantAccessEnabled} email={unit.tenantEmail} /></div>
         </section>
         <div className="flex flex-wrap gap-3">
           <PrimaryButton><Save className="h-5 w-5" />Save Changes</PrimaryButton>
