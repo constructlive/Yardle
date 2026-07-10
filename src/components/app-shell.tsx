@@ -68,6 +68,19 @@ export function AdminShell({ children, demoMode = false, billingPeriods = [] }: 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const focusedReadingMode = pathname === "/admin/readings/map";
   const landlordMode = pathname === "/admin/landlord";
+  const defaultPeriodId = billingPeriods.find((period) => period.status === "draft")?.id ?? billingPeriods[0]?.id ?? "";
+  const [selectedPeriodId, setSelectedPeriodId] = useState(defaultPeriodId);
+  useEffect(() => {
+    const periodId = new URLSearchParams(window.location.search).get("periodId");
+    setSelectedPeriodId(periodId ?? defaultPeriodId);
+  }, [defaultPeriodId, pathname]);
+  function selectBillingPeriod(periodId: string) {
+    setSelectedPeriodId(periodId);
+    const params = new URLSearchParams(window.location.search);
+    if (periodId) params.set("periodId", periodId); else params.delete("periodId");
+    const query = params.toString();
+    window.location.href = query ? `${pathname}?${query}` : pathname;
+  }
 
   if (focusedReadingMode) {
     return <div className="h-[100dvh] overflow-hidden bg-[#0b0d0f]"><LoadingSplash show={showSplash} />{children}</div>;
@@ -88,11 +101,11 @@ export function AdminShell({ children, demoMode = false, billingPeriods = [] }: 
           <div className="flex items-center gap-2">
             <button onClick={() => setDrawerOpen(true)} aria-label="Open menu" className={`grid h-11 w-11 place-items-center rounded-xl border border-slateLine bg-card text-secondaryText hover:bg-hover hover:text-ink ${landlordMode ? "" : "lg:hidden"}`}><Menu className="h-5 w-5" /></button>
             <Link href="/admin" className="flex items-center"><BrandLogo className={`${landlordMode ? "h-10 w-32" : "h-11 w-32"} shrink-0 rounded-xl`} /></Link>
-            <select className="hidden max-w-[15rem] rounded-xl border border-slateLine bg-card px-3 py-2 text-sm font-bold text-ink outline-none transition focus:border-estate-500 md:block" defaultValue={billingPeriods.find((period) => period.status === "draft")?.id ?? billingPeriods[0]?.id ?? ""} aria-label="Current billing period">{billingPeriods.length ? billingPeriods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>) : <option value="">No billing period set</option>}</select>
+            <label className="hidden items-center gap-2 md:flex"><span className="text-[10px] font-black uppercase tracking-wide text-mutedText">Selected billing period</span><select className="max-w-[15rem] rounded-xl border border-slateLine bg-card px-3 py-2 text-sm font-bold text-ink outline-none transition focus:border-estate-500" value={selectedPeriodId} onChange={(event) => selectBillingPeriod(event.target.value)} aria-label="Selected billing period">{billingPeriods.length ? billingPeriods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>) : <option value="">No billing period set</option>}</select></label>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             {demoMode ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-amber-400">Demo Mode</span> : null}
-            <Link href="/admin/readings" className="tap-target hidden items-center justify-center gap-2 rounded-xl bg-estate-500 px-4 py-2.5 text-sm font-black text-[#07110b] shadow-glow transition hover:-translate-y-0.5 hover:bg-estate-600 sm:inline-flex"><Gauge className="h-5 w-5" />Enter Readings</Link>
+            <Link href={selectedPeriodId ? `/admin/readings?periodId=${selectedPeriodId}` : "/admin/readings"} className="tap-target hidden items-center justify-center gap-2 rounded-xl bg-estate-500 px-4 py-2.5 text-sm font-black text-[#07110b] shadow-glow transition hover:-translate-y-0.5 hover:bg-estate-600 sm:inline-flex"><Gauge className="h-5 w-5" />Enter Readings</Link>
             <button className="grid h-11 w-11 place-items-center rounded-xl border border-slateLine bg-card text-secondaryText transition hover:bg-hover hover:text-ink" aria-label="Notifications"><Bell className="h-5 w-5" /></button>
             <div className="hidden items-center gap-2 xl:flex"><UserCircle className="h-6 w-6 text-mutedText" /><span className="text-sm font-bold text-secondaryText">Estate Admin</span></div>
             <form action={logoutAdmin}><button className="flex h-11 items-center gap-2 rounded-xl border border-slateLine bg-card px-3 font-bold text-secondaryText transition hover:bg-hover hover:text-ink" aria-label="Log out"><LogOut className="h-5 w-5" /><span className="hidden xl:inline">Logout</span></button></form>
