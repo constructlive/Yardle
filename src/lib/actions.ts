@@ -34,16 +34,28 @@ function numberValue(value: FormDataEntryValue | null) {
 
 export async function previewHistoricalImportAction(_previousState: HistoricalImportPreviewState, formData: FormData): Promise<HistoricalImportPreviewState> {
   await requireAdminSession();
-  const data = await getAppData();
-  const fallbackYearRaw = text(formData.get("fallbackYear"));
-  const fallbackYear = fallbackYearRaw ? Number(fallbackYearRaw) : undefined;
-  const files = await Promise.all(
-    formData.getAll("files").filter((value): value is File => value instanceof File && value.size > 0).map(async (file) => ({
-      name: file.name,
-      buffer: Buffer.from(await file.arrayBuffer())
-    }))
-  );
-  return previewHistoricalImport({ files, units: data.units, fallbackYear: fallbackYear && Number.isFinite(fallbackYear) ? fallbackYear : undefined });
+  try {
+    const data = await getAppData();
+    const fallbackYearRaw = text(formData.get("fallbackYear"));
+    const fallbackYear = fallbackYearRaw ? Number(fallbackYearRaw) : undefined;
+    const fileValues = formData.getAll("files").filter(isUploadedFile);
+    if (!fileValues.length) {
+      return { ok: false, message: "Choose at least one CSV, XLS or XLSX file before uploading.", rows: [], summaries: [] };
+    }
+    const files = await Promise.all(
+      fileValues.map(async (file) => ({
+        name: String(file.name || "upload"),
+        buffer: Buffer.from(await file.arrayBuffer())
+      }))
+    );
+    return previewHistoricalImport({ files, units: data.units, fallbackYear: fallbackYear && Number.isFinite(fallbackYear) ? fallbackYear : undefined });
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? `Import preview failed: ${error.message}` : "Import preview failed. Please check the file format and try again.", rows: [], summaries: [] };
+  }
+}
+
+function isUploadedFile(value: FormDataEntryValue): value is File {
+  return typeof value === "object" && value !== null && "arrayBuffer" in value && "name" in value && "size" in value && Number((value as File).size) > 0;
 }
 
 export async function confirmHistoricalImportAction(_previousState: HistoricalImportCommitState, formData: FormData): Promise<HistoricalImportCommitState> {

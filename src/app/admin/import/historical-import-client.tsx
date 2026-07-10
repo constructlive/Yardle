@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, Upload } from "lucide-react";
 import { confirmHistoricalImportAction, previewHistoricalImportAction } from "@/lib/actions";
@@ -19,6 +19,7 @@ function SubmitButton({ label, pendingLabel }: { label: string; pendingLabel: st
 }
 
 export function HistoricalImportClient() {
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [preview, previewAction] = useFormState(previewHistoricalImportAction, initialPreview);
   const [commit, commitAction] = useFormState(confirmHistoricalImportAction, initialCommit);
   const [filter, setFilter] = useState<Filter>("all");
@@ -36,7 +37,7 @@ export function HistoricalImportClient() {
 
   return (
     <div className="space-y-6">
-      <form action={previewAction} className="grid gap-5 rounded-2xl border border-slateLine bg-card p-5 shadow-soft">
+      <form action={previewAction} encType="multipart/form-data" className="grid gap-5 rounded-2xl border border-slateLine bg-card p-5 shadow-soft">
         <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
           <div>
             <h2 className="text-2xl font-black text-ink">Anderson Yard historical import</h2>
@@ -47,13 +48,14 @@ export function HistoricalImportClient() {
         <div className="grid gap-4 lg:grid-cols-[1fr_180px_auto]">
           <label className="grid gap-2 text-sm font-black uppercase tracking-wide text-muted">
             Workbooks or CSV files
-            <input name="files" type="file" accept=".xlsx,.xls,.csv" multiple required className="rounded-xl border border-dashed border-slateLine bg-sidebar p-3 text-sm font-bold text-secondaryText file:mr-4 file:rounded-xl file:border-0 file:bg-estate-500 file:px-4 file:py-2 file:font-black file:text-[#07110b]" />
+            <input name="files" type="file" accept=".xlsx,.xls,.csv" multiple required onChange={handleFileChange(setSelectedFiles)} className="rounded-xl border border-dashed border-slateLine bg-sidebar p-3 text-sm font-bold text-secondaryText file:mr-4 file:rounded-xl file:border-0 file:bg-estate-500 file:px-4 file:py-2 file:font-black file:text-[#07110b]" />
+            <span className="rounded-xl border border-slateLine bg-[#101214] px-3 py-2 text-xs font-bold normal-case tracking-normal text-secondaryText">{selectedFiles.length ? selectedFiles.join(", ") : "No file selected yet"}</span>
           </label>
           <label className="grid gap-2 text-sm font-black uppercase tracking-wide text-muted">
             Fallback year
             <input name="fallbackYear" inputMode="numeric" placeholder="2026" className="rounded-xl border border-slateLine bg-sidebar p-3 text-base font-bold text-ink outline-none focus:border-estate-500" />
           </label>
-          <div className="flex items-end"><SubmitButton label="Preview import" pendingLabel="Parsing..." /></div>
+          <div className="flex items-end"><SubmitButton label="Upload and preview" pendingLabel="Uploading..." /></div>
         </div>
         <label className="flex items-center gap-3 rounded-xl border border-slateLine bg-sidebar p-3 text-sm font-bold text-secondaryText"><input type="checkbox" checked readOnly className="h-5 w-5 accent-estate-500" />Import as historical records without notifications</label><p className="text-xs font-semibold text-muted">If a workbook period has no year and the filename has no year, enter the year here before previewing. Yardle will not guess silently.</p>
       </form>
@@ -67,7 +69,7 @@ export function HistoricalImportClient() {
 
       <div className={`rounded-2xl border p-4 text-sm font-bold ${preview.ok ? "border-estate-500/30 bg-estate-500/10 text-green-100" : "border-slateLine bg-card text-secondaryText"}`}>{preview.message}</div>
 
-      {preview.summaries.length ? <section className="rounded-2xl border border-slateLine bg-card p-5 shadow-soft"><h2 className="text-xl font-black text-ink">File summary</h2><div className="mt-4 grid gap-3 md:grid-cols-2">{preview.summaries.map((summary) => <div key={summary.sourceFilename} className="rounded-xl border border-slateLine bg-sidebar p-4"><p className="font-black text-ink">{summary.sourceFilename}</p><p className="mt-1 text-sm font-bold text-secondaryText">{summary.billingPeriodStart && summary.billingPeriodEnd ? `${summary.billingPeriodStart} to ${summary.billingPeriodEnd}` : "Period needs attention"}</p><p className="mt-2 text-xs font-bold text-muted">Rows {summary.totalRows} · Ready {summary.readyRows} · Warnings {summary.warningRows} · Errors {summary.errorRows} · Duplicates {summary.duplicateRows}</p>{summary.warnings.map((warning) => <p key={warning} className="mt-2 text-xs font-bold text-amber-300">{warning}</p>)}</div>)}</div></section> : null}
+      {preview.summaries.length ? <section className="rounded-2xl border border-slateLine bg-card p-5 shadow-soft"><h2 className="text-xl font-black text-ink">File summary</h2><div className="mt-4 grid gap-3 md:grid-cols-2">{preview.summaries.map((summary) => <div key={summary.sourceFilename} className="rounded-xl border border-slateLine bg-sidebar p-4"><p className="font-black text-ink">{summary.sourceFilename}</p><p className="mt-1 text-sm font-bold text-secondaryText">{summary.billingPeriodStart && summary.billingPeriodEnd ? `${summary.billingPeriodStart} to ${summary.billingPeriodEnd}` : "Period needs attention"}</p><p className="mt-2 text-xs font-bold text-muted">Rows {summary.totalRows} Â· Ready {summary.readyRows} Â· Warnings {summary.warningRows} Â· Errors {summary.errorRows} Â· Duplicates {summary.duplicateRows}</p>{summary.warnings.map((warning) => <p key={warning} className="mt-2 text-xs font-bold text-amber-300">{warning}</p>)}</div>)}</div></section> : null}
 
       {preview.rows.length ? (
         <section className="rounded-2xl border border-slateLine bg-card shadow-soft">
@@ -98,6 +100,11 @@ export function HistoricalImportClient() {
   );
 }
 
+function handleFileChange(setSelectedFiles: (files: string[]) => void) {
+  return (event: ChangeEvent<HTMLInputElement>) => {
+    setSelectedFiles(Array.from(event.target.files ?? []).map((file) => file.name));
+  };
+}
 function Summary({ label, value }: { label: string; value: number }) {
   return <div className="rounded-2xl border border-slateLine bg-card p-5 shadow-soft"><p className="text-sm font-bold text-secondaryText">{label}</p><p className="mt-2 text-3xl font-black text-ink">{value}</p></div>;
 }
