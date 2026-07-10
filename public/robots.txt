@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /
+
+# Yardle is a private single-estate management application.
+# Do not crawl or index any route.
