@@ -6,15 +6,16 @@ import { TestSmsForm } from "./test-sms-form";
 export const dynamic = "force-dynamic";
 
 export default async function SmsPage() {
-  const { bills, smsLogs, units } = await getAppData();
-  const firstBill = bills[0];
-  const firstUnit = firstBill ? units.find((unit) => unit.id === firstBill.unitId) : units[0];
+  const { smsLogs, units } = await getAppData();
+  const recipients = units
+    .filter((unit) => unit.tenantMobile)
+    .map((unit) => ({ unitId: unit.id, mobile: unit.tenantMobile, label: `Unit ${unit.unitReference} - ${unit.tenantContactName || unit.tenantName || "No tenant assigned"}` }));
   const provider = await getActiveSmsProviderName();
 
   return (
     <>
-      <PageHeader title="SMS logs" eyebrow={provider === "mock" ? "Mock SMS provider active" : "Production SMS provider active"} action={null} />
-      <TestSmsForm provider={provider} defaultMobile={firstUnit?.tenantMobile} />
+      <PageHeader title="SMS logs" eyebrow="Provider Active" action={null} />
+      <TestSmsForm provider={provider} recipients={recipients} />
       <DataTable>
         <thead>
           <tr>
