@@ -143,7 +143,7 @@ export function LandlordPaymentView({ period, rows, initialFilter = "all" }: { p
       if (!result.ok) { setModalError(result.message); return; }
       setPayments((current) => current.map((item) => item.billId === row.billId ? { ...row, warning: undefined } : item));
       setPaymentModal(null);
-      setNotice(`Payment recorded for Unit ${row.unitReference}.`);
+      setNotice(`Payment recorded for Unit ${row.unitReference}. ${result.message}`);
       router.refresh();
     });
   }

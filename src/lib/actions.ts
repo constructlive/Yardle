@@ -210,10 +210,12 @@ export async function savePaymentUpdate(input: { billId: string; amountPaidPence
   const session = await requireAdminSession();
   if (!hasDatabaseUrl()) {
     saveDemoPaymentUpdate(input);
+    const receipt = await sendPaymentReceiptSms(input.billId, Math.max(0, input.amountPaidPence));
     revalidatePath("/admin/payments");
     revalidatePath("/admin/landlord");
     revalidatePath("/admin/bills");
-    return { ok: true, message: "Payment saved in Demo Mode." };
+    revalidatePath("/admin/sms");
+    return { ok: true, message: receipt.message ? `Payment saved in Demo Mode. ${receipt.message}` : "Payment saved in Demo Mode." };
   }
   await ensureSeeded();
   const normalized = input.paymentMethod.trim().toLowerCase().replaceAll(" ", "_");
@@ -223,6 +225,7 @@ export async function savePaymentUpdate(input: { billId: string; amountPaidPence
   if (input.amountPaidPence > 0 && !input.paymentDate) return { ok: false, message: "Choose a payment date before saving payment." };
 
   let response = { ok: true, message: "Payment saved." };
+  let receiptRequest: { billId: string; amountPence: number } | undefined;
   await transaction(async (client) => {
     const billResult = await client.query("select * from bills where id = ? for update", [input.billId]);
     const bill = billResult.rows[0];
@@ -244,6 +247,7 @@ export async function savePaymentUpdate(input: { billId: string; amountPaidPence
          values (?,?,?,?,?,?,?,?)`,
         [randomUUID(), input.billId, bill.unit_id, delta, method || "other", input.paymentDate, input.notes || null, session.userId]
       );
+      receiptRequest = { billId: input.billId, amountPence: delta };
     }
     const updatedPayments = await client.query("select * from payments where bill_id = ? and reversed_at is null", [input.billId]);
     const active = updatedPayments.rows.map((payment) => ({ id: payment.id, billId: payment.bill_id, unitId: payment.unit_id, amountPence: Number(payment.amount_pence), paymentMethod: payment.payment_method, paymentDate: String(payment.payment_date).slice(0, 10), notes: payment.notes ?? undefined, recordedBy: payment.recorded_by ?? "", createdAt: String(payment.created_at) }));
@@ -251,12 +255,48 @@ export async function savePaymentUpdate(input: { billId: string; amountPaidPence
     await client.query("update bills set amount_paid_pence=?, remaining_balance_pence=?, paid_status=?, payment_date=?, admin_notes=? where id=?", [totals.amountPaidPence, totals.remainingBalancePence, totals.paidStatus, totals.paymentDate || null, input.notes || null, input.billId]);
     await client.query("update units set current_balance_pence=? where id=?", [totals.remainingBalancePence, bill.unit_id]);
   });
+  if (response.ok && receiptRequest) {
+    const receipt = await sendPaymentReceiptSms(receiptRequest.billId, receiptRequest.amountPence);
+    response = { ok: true, message: receipt.message ? `Payment saved. ${receipt.message}` : "Payment saved." };
+  }
   revalidatePath("/admin/payments");
   revalidatePath("/admin/landlord");
   revalidatePath("/admin/bills");
+  revalidatePath("/admin/sms");
   return response;
 }
 
+async function sendPaymentReceiptSms(billId: string, amountPence: number) {
+  if (amountPence <= 0) return { message: "" };
+  const data = await getAppData();
+  const bill = data.bills.find((item) => item.id === billId);
+  const unit = bill ? data.units.find((item) => item.id === bill.unitId) : undefined;
+  const period = bill ? data.billingPeriods.find((item) => item.id === bill.billingPeriodId) : undefined;
+  if (!bill || !unit) return { message: "Payment receipt SMS not sent: bill or tenant could not be found." };
+  if (!unit.tenantMobile) return { message: "Payment receipt SMS not sent: no mobile number is saved." };
+
+  try {
+    const log = await sendAndLogSms({
+      billId: bill.id,
+      unitId: unit.id,
+      mobile: unit.tenantMobile,
+      message: await renderSmsTemplate("payment_received", {
+        estateName: data.estate.name,
+        tenantName: unit.tenantName || "Tenant",
+        unitNumber: unit.unitReference,
+        billType: period?.name || "your Yardle bill",
+        amount: new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(amountPence / 100),
+        dueDate: period?.endDate || "",
+        paymentLink: unit.tenantAccessEnabled && unit.tenantAccessToken ? getTenantBillUrl(unit.tenantAccessToken) : ""
+      })
+    });
+    if (log.status === "failed") return { message: `Payment receipt SMS failed: ${log.failureReason || "provider rejected the message."}` };
+    return { message: `Payment receipt SMS ${log.status === "simulated" ? "simulated" : "sent"} to ${log.mobile}.` };
+  } catch (error) {
+    const message = error instanceof Error && error.message ? error.message : "SMS provider request failed.";
+    return { message: `Payment receipt SMS failed: ${message}` };
+  }
+}
 export async function reversePayment(input: { paymentId: string; reason?: string }) {
   const session = await requireAdminSession();
   if (!hasDatabaseUrl()) {
