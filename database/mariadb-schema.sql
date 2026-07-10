@@ -130,6 +130,9 @@ create table if not exists payments (
   payment_date date not null,
   notes text,
   recorded_by char(36),
+  reversed_at datetime,
+  reversed_by char(36),
+  reversal_reason text,
   created_at datetime not null default current_timestamp,
   constraint fk_payments_bill foreign key (bill_id) references bills(id) on delete cascade,
   constraint fk_payments_unit foreign key (unit_id) references units(id) on delete cascade,
@@ -228,8 +231,6 @@ create index idx_payments_bill on payments (bill_id);
 create index idx_sms_logs_created_at on sms_logs (created_at);
 create index idx_historical_bills_unit_period on historical_bills (unit_id, billing_period_start, billing_period_end);
 create index idx_historical_import_batches_uploaded on historical_import_batches (uploaded_at);
-
-create index idx_payments_bill_active on payments (bill_id, reversed_at);
 
 -- Additive migrations for existing production databases. These preserve current rows and values.
 alter table payments add column if not exists reversed_at datetime after recorded_by, add column if not exists reversed_by char(36) after reversed_at, add column if not exists reversal_reason text after reversed_by;
