@@ -1,5 +1,6 @@
 import { DataTable, PageHeader, StatusPill, Td, Th } from "@/components/ui";
 import { getAppData } from "@/lib/data";
+import { getActiveSmsProviderName } from "@/lib/sms-logging";
 import { TestSmsForm } from "./test-sms-form";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export default async function SmsPage() {
   const { bills, smsLogs, units } = await getAppData();
   const firstBill = bills[0];
   const firstUnit = firstBill ? units.find((unit) => unit.id === firstBill.unitId) : units[0];
-  const provider = (process.env.SMS_PROVIDER || "mock").toLowerCase();
+  const provider = await getActiveSmsProviderName();
 
   return (
     <>

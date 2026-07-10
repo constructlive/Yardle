@@ -77,8 +77,8 @@ export class TwilioSmsProvider implements SmsProvider {
   }
 }
 
-export function getSmsProvider(): SmsProvider {
-  const provider = (process.env.SMS_PROVIDER || "mock").toLowerCase();
+export function getSmsProvider(providerName = process.env.SMS_PROVIDER || "mock"): SmsProvider {
+  const provider = providerName.toLowerCase();
   if (provider === "twilio") {
     return new TwilioSmsProvider();
   }

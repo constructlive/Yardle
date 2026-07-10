@@ -11,8 +11,27 @@ type SendAndLogSmsInput = {
   message: string;
 };
 
+export async function getActiveSmsProviderName(client?: DbClient) {
+  const envProvider = (process.env.SMS_PROVIDER || "").trim().toLowerCase();
+  const runner = client ?? { query };
+
+  if (hasDatabaseUrl()) {
+    try {
+      const result = await runner.query<{ setting_value: string }>("select setting_value from settings where setting_key = ? limit 1", ["sms.provider"]);
+      const raw = result.rows[0]?.setting_value;
+      const settingProvider = raw ? String(JSON.parse(raw)).trim().toLowerCase() : "";
+      if (settingProvider === "twilio" || settingProvider === "mock") return settingProvider;
+    } catch {
+      // Fall back to environment if settings are not available yet.
+    }
+  }
+
+  return envProvider || "mock";
+}
+
 export async function sendAndLogSms(input: SendAndLogSmsInput, client?: DbClient): Promise<SmsLog> {
-  const provider = getSmsProvider();
+  const providerName = await getActiveSmsProviderName(client);
+  const provider = getSmsProvider(providerName);
   const response = await provider.send({ mobile: input.mobile, message: input.message });
   const now = new Date().toISOString();
   const log: SmsLog = {
