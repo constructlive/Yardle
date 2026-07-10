@@ -22,7 +22,7 @@ Open `http://localhost:3000`.
 
 When `DATABASE_URL` is not set, Yardle runs in local Demo Mode using the bundled `src/lib/demo-data.ts` data through an in-memory store. The admin header shows a small Demo Mode badge, and local preview pages load without MariaDB. Demo Mode changes last for the current dev server session only.
 
-When `DATABASE_URL` is set, Yardle uses MariaDB for persistent app data. Demo data is seed data only and is inserted only when `npm run db:seed` is run explicitly.
+When `DATABASE_URL` is set, Yardle uses MariaDB for persistent app data. `npm run db:seed` creates only the required single-estate baseline and default settings; it does not create demo tenants or bills.
 
 ## Database
 
@@ -32,7 +32,7 @@ Create a MariaDB database and run:
 npm run db:setup
 ```
 
-Optional demo seed:
+Optional production seed for the single-estate baseline:
 
 ```bash
 npm run db:seed

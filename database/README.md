@@ -36,15 +36,15 @@ npm run db:setup
 
 This imports `database/mariadb-schema.sql` using InnoDB, `utf8mb4`, application-generated UUID strings, `TINYINT(1)` booleans, and MariaDB-compatible indexes/foreign keys.
 
-## 4. Optional demo seed
+## 4. Optional production seed
 
-Demo data is never loaded automatically when a database is configured except through the explicit seed command:
+The seed command creates only the required single-estate baseline and default settings. It is idempotent and does not create demo tenants, demo bills, readings, payments, or SMS logs:
 
 ```bash
 npm run db:seed
 ```
 
-Use this for local/staging previews only.
+Run it after `db:setup` when the database needs the initial Yardle estate/settings rows.
 
 ## 5. Create the first admin
 
