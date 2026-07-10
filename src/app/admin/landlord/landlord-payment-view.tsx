@@ -23,6 +23,7 @@ interface PaymentRow {
   tenantName: string;
   totalDuePence: number;
   amountPaidPence: number;
+  amountPaidInput: string;
   remainingBalancePence: number;
   paidStatus: PaidStatus;
   paymentMethod: PaymentMethod;
@@ -52,6 +53,7 @@ function createRows(rows: LandlordRow[]): PaymentRow[] {
       tenantName: unit?.tenantName || "Vacant",
       totalDuePence: bill.roundedTotalPence,
       amountPaidPence: bill.amountPaidPence,
+      amountPaidInput: (bill.amountPaidPence / 100).toFixed(2),
       remainingBalancePence: bill.remainingBalancePence,
       paidStatus: bill.paidStatus,
       paymentMethod: toUiMethod(latest?.paymentMethod),
@@ -100,15 +102,32 @@ export function LandlordPaymentView({ period, rows, initialFilter = "all" }: { p
   function setPaid(billId: string, checked: boolean) {
     updateRow(billId, (row) => {
       if (checked && !row.paymentMethod) return { ...row, selected: true, warning: "Choose a payment method before marking paid." };
-      const next = checked ? { ...row, selected: true, amountPaidPence: row.totalDuePence, remainingBalancePence: 0, paidStatus: "paid" as const, paymentDate: row.paymentDate || today(), warning: undefined } : { ...row, selected: false };
+      const next = checked ? { ...row, selected: true, amountPaidPence: row.totalDuePence, amountPaidInput: (row.totalDuePence / 100).toFixed(2), remainingBalancePence: 0, paidStatus: "paid" as const, paymentDate: row.paymentDate || today(), warning: undefined } : { ...row, selected: false };
       if (checked) void persistRow(next);
       return next;
     });
   }
 
+  function normaliseAmount(value: string) {
+    return value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+  }
+
+  function amountToPence(value: string) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed * 100)) : 0;
+  }
+
   function setAmountPaid(billId: string, value: string) {
-    const amountPaidPence = Math.max(0, Math.round(Number(value || 0) * 100));
-    updateRow(billId, (row) => ({ ...row, amountPaidPence, remainingBalancePence: Math.max(0, row.totalDuePence - amountPaidPence), paidStatus: statusForPayment(amountPaidPence, row.totalDuePence), selected: amountPaidPence > 0, paymentDate: amountPaidPence > 0 && !row.paymentDate ? today() : row.paymentDate, warning: undefined }));
+    const amountPaidInput = normaliseAmount(value);
+    const amountPaidPence = amountToPence(amountPaidInput);
+    updateRow(billId, (row) => ({ ...row, amountPaidInput, amountPaidPence, remainingBalancePence: Math.max(0, row.totalDuePence - amountPaidPence), paidStatus: statusForPayment(amountPaidPence, row.totalDuePence), selected: amountPaidPence > 0, paymentDate: amountPaidPence > 0 && !row.paymentDate ? today() : row.paymentDate, warning: undefined }));
+  }
+
+  function finishAmountEdit(row: PaymentRow) {
+    const amountPaidPence = amountToPence(row.amountPaidInput);
+    const next = { ...row, amountPaidPence, amountPaidInput: (amountPaidPence / 100).toFixed(2), remainingBalancePence: Math.max(0, row.totalDuePence - amountPaidPence), paidStatus: statusForPayment(amountPaidPence, row.totalDuePence), selected: amountPaidPence > 0 };
+    updateRow(row.billId, () => next);
+    void persistRow(next);
   }
 
   function markSelectedPaid() {
@@ -117,7 +136,7 @@ export function LandlordPaymentView({ period, rows, initialFilter = "all" }: { p
     if (selectedRows.some((row) => !row.paymentMethod)) { setPayments((current) => current.map((row) => row.selected && !row.paymentMethod ? { ...row, warning: "Choose a payment method." } : row)); setNotice("Choose a payment method for selected rows."); return; }
     setPayments((current) => current.map((row) => {
       if (!row.selected) return row;
-      const next = { ...row, amountPaidPence: row.totalDuePence, remainingBalancePence: 0, paidStatus: "paid" as const, paymentDate: row.paymentDate || today(), warning: undefined };
+      const next = { ...row, amountPaidPence: row.totalDuePence, amountPaidInput: (row.totalDuePence / 100).toFixed(2), remainingBalancePence: 0, paidStatus: "paid" as const, paymentDate: row.paymentDate || today(), warning: undefined };
       void persistRow(next);
       return next;
     }));
@@ -136,7 +155,7 @@ export function LandlordPaymentView({ period, rows, initialFilter = "all" }: { p
       const nextPayments = current.payments.map((item) => item.id === payment.id ? { ...item, reversedAt: new Date().toISOString(), reversalReason: "Landlord correction" } : item);
       const totals = paymentTotals(current.totalDuePence, nextPayments);
       const active = activePayments(nextPayments);
-      return { ...current, payments: nextPayments, ...totals, paymentDate: totals.paymentDate ?? "", reversalPaymentId: active[0]?.id ?? "", selected: false };
+      return { ...current, payments: nextPayments, ...totals, amountPaidInput: (totals.amountPaidPence / 100).toFixed(2), paymentDate: totals.paymentDate ?? "", reversalPaymentId: active[0]?.id ?? "", selected: false };
     });
   }
 
@@ -146,5 +165,5 @@ export function LandlordPaymentView({ period, rows, initialFilter = "all" }: { p
   return <div className="space-y-4"><header className="flex flex-col gap-1"><p className="text-xs font-black uppercase tracking-[0.18em] text-estate-500">Landlord View</p><h1 className="text-2xl font-black text-ink md:text-3xl">Simple Payment Checklist</h1></header>
     <section className="flex flex-wrap gap-2">{[["Current billing period", period?.name ?? "No active period"], ["Total outstanding", formatMoney(summary.totalOutstanding)], ["Total paid this period", formatMoney(summary.totalPaid)], ["Unpaid bills", summary.unpaid], ["Paid bills", summary.paid]].map(([label, value]) => <div key={label} className="min-w-[10rem] rounded-xl border border-slateLine bg-card px-4 py-3 shadow-soft"><p className="text-[11px] font-black uppercase text-mutedText">{label}</p><p className="mt-1 text-lg font-black text-ink">{value}</p></div>)}</section>
     <section className="rounded-xl border border-slateLine bg-card p-3 shadow-soft"><div className="flex flex-wrap items-center gap-2">{filters.map(([value, label]) => <button key={value} onClick={() => setFilter(value)} className={`rounded-xl px-3 py-2 text-sm font-black ${filter === value ? "bg-estate-500 text-[#07110b]" : "border border-slateLine bg-sidebar text-secondaryText hover:bg-hover"}`}>{label}</button>)}<label className="relative min-w-64 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-mutedText" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 w-full rounded-xl border border-slateLine bg-sidebar pl-10 pr-3 text-sm font-bold text-ink outline-none focus:border-estate-500" placeholder="Search unit, tenant, or amount" /></label><button onClick={markSelectedPaid} className="rounded-xl bg-estate-500 px-3 py-2 text-sm font-black text-[#07110b]">Mark selected as paid</button><button onClick={sendSelectedReminders} className="rounded-xl border border-slateLine bg-sidebar px-3 py-2 text-sm font-black text-secondaryText">Send reminder</button><button onClick={exportCsv} className="inline-flex items-center gap-2 rounded-xl border border-slateLine bg-sidebar px-3 py-2 text-sm font-black text-secondaryText"><Download className="h-4 w-4" />Export CSV</button></div>{notice ? <div className="mt-3 rounded-xl border border-estate-500/30 bg-estate-500/10 px-3 py-2 text-sm font-bold text-estate-500">{notice}</div> : null}</section>
-    <section className="overflow-x-auto rounded-xl border border-slateLine bg-card shadow-soft"><table className="min-w-[1180px] w-full table-fixed divide-y divide-slateLine text-left text-xs [&_tbody_tr:nth-child(even)]:bg-white/[0.025] [&_tbody_tr:hover]:bg-hover"><thead className="sticky top-[57px] z-[1] bg-sidebar"><tr>{["Paid", "Unit", "Tenant", "Total due", "Amount paid", "Remaining balance", "Payment method", "Payment date", "Notes", "Action"].map((heading) => <th key={heading} className="px-2 py-2 font-black text-secondaryText">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slateLine">{visibleRows.map((row) => { const active = activePayments(row.payments); return <tr key={row.billId}><td className="w-14 px-2 py-2"><input type="checkbox" checked={row.selected || row.paidStatus === "paid"} onChange={(event) => setPaid(row.billId, event.target.checked)} className="h-5 w-5 accent-estate-500" /></td><td className="w-16 px-2 py-2 text-base font-black text-ink">{row.unitReference}</td><td className="w-44 px-2 py-2 font-bold text-secondaryText">{row.tenantName}</td><td className="w-24 px-2 py-2 font-black text-ink">{formatMoney(row.totalDuePence)}</td><td className="w-28 px-2 py-2"><input value={(row.amountPaidPence / 100).toFixed(2)} onChange={(event) => setAmountPaid(row.billId, event.target.value)} onBlur={() => void persistRow(row)} inputMode="decimal" className="h-9 w-full rounded-lg border border-slateLine bg-sidebar px-2 font-black text-ink outline-none focus:border-estate-500" /></td><td className="w-28 px-2 py-2 font-black text-amber-400">{formatMoney(row.remainingBalancePence)}</td><td className="w-36 px-2 py-2"><select value={row.paymentMethod} onChange={(event) => updateRow(row.billId, (current) => ({ ...current, paymentMethod: event.target.value as PaymentMethod, warning: undefined }))} onBlur={() => void persistRow(row)} className="h-9 w-full rounded-lg border border-slateLine bg-sidebar px-2 font-bold text-ink outline-none focus:border-estate-500">{methodOptions.map((method) => <option key={method} value={method}>{method || "Choose"}</option>)}</select>{row.warning ? <p className="mt-1 text-[11px] font-bold text-amber-400">{row.warning}</p> : null}</td><td className="w-32 px-2 py-2"><input type="date" value={row.paymentDate} onChange={(event) => updateRow(row.billId, (current) => ({ ...current, paymentDate: event.target.value }))} onBlur={() => void persistRow(row)} className="h-9 w-full rounded-lg border border-slateLine bg-sidebar px-2 font-bold text-ink outline-none focus:border-estate-500" /></td><td className="w-44 px-2 py-2"><input value={row.notes} onChange={(event) => updateRow(row.billId, (current) => ({ ...current, notes: event.target.value }))} onBlur={() => void persistRow(row)} className="h-9 w-full rounded-lg border border-slateLine bg-sidebar px-2 font-bold text-ink outline-none focus:border-estate-500" placeholder="Note" /></td><td className="w-44 px-2 py-2">{active.length ? <div className="flex gap-2"><select value={row.reversalPaymentId} onChange={(event) => updateRow(row.billId, (current) => ({ ...current, reversalPaymentId: event.target.value }))} className="h-9 min-w-0 flex-1 rounded-lg border border-slateLine bg-sidebar px-2 font-bold text-ink"><option value="">Payment</option>{active.map((payment) => <option key={payment.id} value={payment.id}>{activePaymentLabel(payment)}</option>)}</select><button onClick={() => void reverseSelectedPayment(row)} className="grid h-9 w-9 place-items-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-300" title="Reverse payment"><RotateCcw className="h-4 w-4" /></button></div> : <span className="text-mutedText">No payment</span>}</td></tr>; })}</tbody></table></section></div>;
+    <section className="overflow-x-auto rounded-xl border border-slateLine bg-card shadow-soft"><table className="min-w-[1180px] w-full table-fixed divide-y divide-slateLine text-left text-xs [&_tbody_tr:nth-child(even)]:bg-white/[0.025] [&_tbody_tr:hover]:bg-hover"><thead className="sticky top-[57px] z-[1] bg-sidebar"><tr>{["Paid", "Unit", "Tenant", "Total due", "Amount paid", "Remaining balance", "Payment method", "Payment date", "Notes", "Action"].map((heading) => <th key={heading} className="px-2 py-2 font-black text-secondaryText">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slateLine">{visibleRows.map((row) => { const active = activePayments(row.payments); return <tr key={row.billId}><td className="w-14 px-2 py-2"><input type="checkbox" checked={row.selected || row.paidStatus === "paid"} onChange={(event) => setPaid(row.billId, event.target.checked)} className="h-5 w-5 accent-estate-500" /></td><td className="w-16 px-2 py-2 text-base font-black text-ink">{row.unitReference}</td><td className="w-44 px-2 py-2 font-bold text-secondaryText">{row.tenantName}</td><td className="w-24 px-2 py-2 font-black text-ink">{formatMoney(row.totalDuePence)}</td><td className="w-28 px-2 py-2"><input value={row.amountPaidInput} onChange={(event) => setAmountPaid(row.billId, event.target.value)} onBlur={() => finishAmountEdit(row)} inputMode="decimal" className="h-9 w-full rounded-lg border border-slateLine bg-sidebar px-2 font-black text-ink outline-none focus:border-estate-500" /></td><td className="w-28 px-2 py-2 font-black text-amber-400">{formatMoney(row.remainingBalancePence)}</td><td className="w-36 px-2 py-2"><select value={row.paymentMethod} onChange={(event) => updateRow(row.billId, (current) => ({ ...current, paymentMethod: event.target.value as PaymentMethod, warning: undefined }))} onBlur={() => void persistRow(row)} className="h-9 w-full rounded-lg border border-slateLine bg-sidebar px-2 font-bold text-ink outline-none focus:border-estate-500">{methodOptions.map((method) => <option key={method} value={method}>{method || "Choose"}</option>)}</select>{row.warning ? <p className="mt-1 text-[11px] font-bold text-amber-400">{row.warning}</p> : null}</td><td className="w-32 px-2 py-2"><input type="date" value={row.paymentDate} onChange={(event) => updateRow(row.billId, (current) => ({ ...current, paymentDate: event.target.value }))} onBlur={() => void persistRow(row)} className="h-9 w-full rounded-lg border border-slateLine bg-sidebar px-2 font-bold text-ink outline-none focus:border-estate-500" /></td><td className="w-44 px-2 py-2"><input value={row.notes} onChange={(event) => updateRow(row.billId, (current) => ({ ...current, notes: event.target.value }))} onBlur={() => void persistRow(row)} className="h-9 w-full rounded-lg border border-slateLine bg-sidebar px-2 font-bold text-ink outline-none focus:border-estate-500" placeholder="Note" /></td><td className="w-44 px-2 py-2">{active.length ? <div className="flex gap-2"><select value={row.reversalPaymentId} onChange={(event) => updateRow(row.billId, (current) => ({ ...current, reversalPaymentId: event.target.value }))} className="h-9 min-w-0 flex-1 rounded-lg border border-slateLine bg-sidebar px-2 font-bold text-ink"><option value="">Payment</option>{active.map((payment) => <option key={payment.id} value={payment.id}>{activePaymentLabel(payment)}</option>)}</select><button onClick={() => void reverseSelectedPayment(row)} className="grid h-9 w-9 place-items-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-300" title="Reverse payment"><RotateCcw className="h-4 w-4" /></button></div> : <span className="text-mutedText">No payment</span>}</td></tr>; })}</tbody></table></section></div>;
 }

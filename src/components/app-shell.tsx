@@ -6,6 +6,7 @@ import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { BrandLogo } from "./brand-logo";
 import { logoutAdmin } from "@/lib/auth-actions";
 import { BarChart3, Bell, Building2, ClipboardList, CreditCard, FileText, Gauge, HandCoins, Home, LogOut, Menu, MessageSquare, ReceiptText, Settings, Upload, UserCircle, X } from "lucide-react";
+import type { BillingPeriod } from "@/lib/types";
 
 const adminLinks: Array<[string, string, ComponentType<{ className?: string }>, string]> = [
   ["Dashboard", "/admin", Home, "Dashboard"],
@@ -61,7 +62,7 @@ function NavigationDrawer({ open, pathname, onClose }: { open: boolean; pathname
   );
 }
 
-export function AdminShell({ children, demoMode = false }: { children: ReactNode; demoMode?: boolean }) {
+export function AdminShell({ children, demoMode = false, billingPeriods = [] }: { children: ReactNode; demoMode?: boolean; billingPeriods?: BillingPeriod[] }) {
   const pathname = usePathname();
   const showSplash = useRouteSplash(pathname);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -87,7 +88,7 @@ export function AdminShell({ children, demoMode = false }: { children: ReactNode
           <div className="flex items-center gap-2">
             <button onClick={() => setDrawerOpen(true)} aria-label="Open menu" className={`grid h-11 w-11 place-items-center rounded-xl border border-slateLine bg-card text-secondaryText hover:bg-hover hover:text-ink ${landlordMode ? "" : "lg:hidden"}`}><Menu className="h-5 w-5" /></button>
             <Link href="/admin" className="flex items-center"><BrandLogo className={`${landlordMode ? "h-10 w-32" : "h-11 w-32"} shrink-0 rounded-xl`} /></Link>
-            <select className="hidden rounded-xl border border-slateLine bg-card px-3 py-2 text-sm font-bold text-ink outline-none transition focus:border-estate-500 md:block"><option>1st June - 30th June 2026</option><option>1st May - 31st May 2026</option></select>
+            <select className="hidden max-w-[15rem] rounded-xl border border-slateLine bg-card px-3 py-2 text-sm font-bold text-ink outline-none transition focus:border-estate-500 md:block" defaultValue={billingPeriods.find((period) => period.status === "draft")?.id ?? billingPeriods[0]?.id ?? ""} aria-label="Current billing period">{billingPeriods.length ? billingPeriods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>) : <option value="">No billing period set</option>}</select>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             {demoMode ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-amber-400">Demo Mode</span> : null}
