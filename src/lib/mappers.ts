@@ -1,7 +1,29 @@
 import type { Bill, BillingPeriod, Estate, MeterReading, Payment, SmsLog, Unit, User } from "./types";
 
+function safeDateTime(value: unknown): string | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+  const text = String(value).trim();
+  if (!text || text.startsWith("0000-00-00")) return undefined;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+}
+
+function safeDate(value: unknown): string | undefined {
+  const dateTime = safeDateTime(value);
+  return dateTime?.slice(0, 10);
+}
+
+function requiredDateTime(value: unknown) {
+  return safeDateTime(value) ?? new Date(0).toISOString();
+}
+
+function requiredDate(value: unknown) {
+  return safeDate(value) ?? "";
+}
+
 export function mapUser(row: any): User {
-  return { id: row.id, name: row.name, email: row.email, mobile: row.mobile ?? "", role: row.role, createdAt: row.created_at?.toISOString?.() ?? String(row.created_at) };
+  return { id: row.id, name: row.name, email: row.email, mobile: row.mobile ?? "", role: row.role, createdAt: requiredDateTime(row.created_at) };
 }
 
 export function mapEstate(row: any): Estate {
@@ -17,7 +39,7 @@ export function mapEstate(row: any): Estate {
     defaultLevyPence: row.default_levy_pence,
     currency: row.currency,
     smsSenderName: row.sms_sender_name,
-    createdAt: row.created_at?.toISOString?.() ?? String(row.created_at)
+    createdAt: requiredDateTime(row.created_at)
   };
 }
 
@@ -38,9 +60,9 @@ export function mapUnit(row: any): Unit {
     openingBalancePence: row.opening_balance_pence,
     currentBalancePence: row.current_balance_pence,
     tenantAccessToken: row.tenant_access_token ?? "",
-    tenantAccessTokenCreatedAt: row.tenant_access_token_created_at ? row.tenant_access_token_created_at?.toISOString?.() ?? String(row.tenant_access_token_created_at) : undefined,
+    tenantAccessTokenCreatedAt: safeDateTime(row.tenant_access_token_created_at),
     tenantAccessEnabled: Boolean(row.tenant_access_enabled),
-    createdAt: row.created_at?.toISOString?.() ?? String(row.created_at)
+    createdAt: requiredDateTime(row.created_at)
   };
 }
 
@@ -49,15 +71,15 @@ export function mapBillingPeriod(row: any): BillingPeriod {
     id: row.id,
     estateId: row.estate_id,
     name: row.name,
-    startDate: row.start_date?.toISOString?.().slice(0, 10) ?? String(row.start_date).slice(0, 10),
-    endDate: row.end_date?.toISOString?.().slice(0, 10) ?? String(row.end_date).slice(0, 10),
+    startDate: requiredDate(row.start_date),
+    endDate: requiredDate(row.end_date),
     status: row.status,
     kwhRatePence: row.kwh_rate_pence,
     standingChargePence: row.standing_charge_pence,
     levyPence: row.levy_pence,
     createdBy: row.created_by ?? "",
-    issuedAt: row.issued_at ? row.issued_at?.toISOString?.() ?? String(row.issued_at) : undefined,
-    createdAt: row.created_at?.toISOString?.() ?? String(row.created_at)
+    issuedAt: safeDateTime(row.issued_at),
+    createdAt: requiredDateTime(row.created_at)
   };
 }
 
@@ -73,7 +95,7 @@ export function mapMeterReading(row: any): MeterReading {
     readingNotes: row.reading_notes ?? undefined,
     readingStatus: row.reading_status,
     enteredBy: row.entered_by ?? "",
-    enteredAt: row.entered_at?.toISOString?.() ?? String(row.entered_at),
+    enteredAt: requiredDateTime(row.entered_at),
     photoUrl: row.photo_url ?? undefined
   };
 }
@@ -97,13 +119,13 @@ export function mapBill(row: any): Bill {
     amountPaidPence: row.amount_paid_pence,
     remainingBalancePence: row.remaining_balance_pence,
     paidStatus: row.paid_status,
-    paymentDate: row.payment_date ? row.payment_date?.toISOString?.().slice(0, 10) ?? String(row.payment_date).slice(0, 10) : undefined,
+    paymentDate: safeDate(row.payment_date),
     adminNotes: row.admin_notes ?? undefined,
     tenantNotes: row.tenant_notes ?? undefined,
     pdfUrl: row.pdf_url ?? undefined,
-    issuedAt: row.issued_at ? row.issued_at?.toISOString?.() ?? String(row.issued_at) : undefined,
-    smsSentAt: row.sms_sent_at ? row.sms_sent_at?.toISOString?.() ?? String(row.sms_sent_at) : undefined,
-    createdAt: row.created_at?.toISOString?.() ?? String(row.created_at)
+    issuedAt: safeDateTime(row.issued_at),
+    smsSentAt: safeDateTime(row.sms_sent_at),
+    createdAt: requiredDateTime(row.created_at)
   };
 }
 
@@ -114,13 +136,13 @@ export function mapPayment(row: any): Payment {
     unitId: row.unit_id,
     amountPence: row.amount_pence,
     paymentMethod: row.payment_method,
-    paymentDate: row.payment_date?.toISOString?.().slice(0, 10) ?? String(row.payment_date).slice(0, 10),
+    paymentDate: requiredDate(row.payment_date),
     notes: row.notes ?? undefined,
     recordedBy: row.recorded_by ?? "",
-    reversedAt: row.reversed_at ? row.reversed_at?.toISOString?.() ?? String(row.reversed_at) : undefined,
+    reversedAt: safeDateTime(row.reversed_at),
     reversedBy: row.reversed_by ?? undefined,
     reversalReason: row.reversal_reason ?? undefined,
-    createdAt: row.created_at?.toISOString?.() ?? String(row.created_at)
+    createdAt: requiredDateTime(row.created_at)
   };
 }
 
@@ -135,9 +157,7 @@ export function mapSmsLog(row: any): SmsLog {
     provider: row.provider,
     providerReference: row.provider_reference ?? "",
     failureReason: row.failure_reason ?? undefined,
-    sentAt: row.sent_at ? row.sent_at?.toISOString?.() ?? String(row.sent_at) : undefined,
-    createdAt: row.created_at?.toISOString?.() ?? String(row.created_at)
+    sentAt: safeDateTime(row.sent_at),
+    createdAt: requiredDateTime(row.created_at)
   };
 }
-
-
