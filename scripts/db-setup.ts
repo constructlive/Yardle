@@ -1,8 +1,6 @@
 import { readFileSync } from "node:fs";
-import mysql from "mysql2/promise";
+import mysql, { type Connection } from "mysql2/promise";
 import { loadLocalEnv } from "./env";
-
-loadLocalEnv();
 
 function getConfig() {
   if (process.env.DATABASE_URL) {
@@ -35,11 +33,21 @@ function getConfig() {
   };
 }
 
-const sql = readFileSync("database/mariadb-schema.sql", "utf8");
-const connection = await mysql.createConnection(getConfig());
-try {
-  await connection.query(sql);
-  console.log("MariaDB schema applied.");
-} finally {
-  await connection.end();
+async function main() {
+  loadLocalEnv();
+  let connection: Connection | undefined;
+
+  try {
+    const sql = readFileSync("database/mariadb-schema.sql", "utf8");
+    connection = await mysql.createConnection(getConfig());
+    await connection.query(sql);
+    console.log("MariaDB schema applied.");
+  } finally {
+    await connection?.end();
+  }
 }
+
+main().catch((error) => {
+  console.error("Failed to apply MariaDB schema:", error);
+  process.exit(1);
+});

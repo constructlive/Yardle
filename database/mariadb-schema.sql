@@ -230,3 +230,8 @@ create index idx_historical_bills_unit_period on historical_bills (unit_id, bill
 create index idx_historical_import_batches_uploaded on historical_import_batches (uploaded_at);
 
 create index idx_payments_bill_active on payments (bill_id, reversed_at);
+
+-- Additive migrations for existing production databases. These preserve current rows and values.
+alter table payments add column if not exists reversed_at datetime after recorded_by, add column if not exists reversed_by char(36) after reversed_at, add column if not exists reversal_reason text after reversed_by;
+alter table sms_logs add column if not exists failure_reason text after provider_reference;
+create index if not exists idx_payments_bill_active on payments (bill_id, reversed_at);
