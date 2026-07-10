@@ -1,4 +1,4 @@
-export type Role = "super_admin" | "admin" | "tenant";
+export type Role = "super_admin" | "landlord_admin" | "admin" | "tenant";
 export type UnitStatus = "active" | "inactive" | "empty" | "not_used";
 export type BillingPeriodStatus = "draft" | "review" | "issued" | "locked";
 export type ReadingStatus = "draft" | "confirmed" | "billed";

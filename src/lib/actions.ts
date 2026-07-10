@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { calculateUsage } from "./billing";
@@ -36,7 +37,7 @@ export async function saveEstateSettings(formData: FormData) {
   }
   await ensureSeeded();
   await query(
-    `update estates set name = $1, contact_email = $2, contact_phone = $3, sms_sender_name = $4, default_kwh_rate_pence = $5, default_standing_charge_pence = $6, default_levy_pence = $7, address = $8 where id = $9`,
+    `update estates set name = ?, contact_email = ?, contact_phone = ?, sms_sender_name = ?, default_kwh_rate_pence = ?, default_standing_charge_pence = ?, default_levy_pence = ?, address = ? where id = ?`,
     [text(formData.get("name")), text(formData.get("contactEmail")), text(formData.get("contactPhone")), text(formData.get("smsSenderName")), pence(formData.get("defaultKwhRate")) ?? 0, pence(formData.get("defaultStandingCharge")) ?? 0, pence(formData.get("defaultLevy")) ?? 0, text(formData.get("address")), text(formData.get("estateId"))]
   );
   revalidatePath("/admin/settings");
@@ -76,13 +77,13 @@ export async function saveUnit(formData: FormData) {
   }
   if (unitId) {
     await query(
-      `update units set estate_id=$1, unit_reference=$2, tenant_name=$3, tenant_contact_name=$4, tenant_email=$5, tenant_mobile=$6, status=$7, notes=$8, free_supply_meter=$9, custom_kwh_rate_pence=$10, custom_standing_charge_pence=$11, opening_balance_pence=$12, current_balance_pence=$13, tenant_access_enabled=$14 where id=$15`,
+      `update units set estate_id=?, unit_reference=?, tenant_name=?, tenant_contact_name=?, tenant_email=?, tenant_mobile=?, status=?, notes=?, free_supply_meter=?, custom_kwh_rate_pence=?, custom_standing_charge_pence=?, opening_balance_pence=?, current_balance_pence=?, tenant_access_enabled=? where id=?`,
       [...params, unitId]
     );
   } else {
     await query(
-      `insert into units (estate_id, unit_reference, tenant_name, tenant_contact_name, tenant_email, tenant_mobile, status, notes, free_supply_meter, custom_kwh_rate_pence, custom_standing_charge_pence, opening_balance_pence, current_balance_pence, tenant_access_enabled, tenant_access_token, tenant_access_token_created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now())`,
-      [...params, createTenantAccessToken()]
+      `insert into units (id, estate_id, unit_reference, tenant_name, tenant_contact_name, tenant_email, tenant_mobile, status, notes, free_supply_meter, custom_kwh_rate_pence, custom_standing_charge_pence, opening_balance_pence, current_balance_pence, tenant_access_enabled, tenant_access_token, tenant_access_token_created_at) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,utc_timestamp())`,
+      [randomUUID(), ...params, createTenantAccessToken()]
     );
   }
   revalidatePath("/admin/units");
@@ -95,7 +96,7 @@ export async function archiveUnit(formData: FormData) {
     return;
   }
   await ensureSeeded();
-  await query("update units set status = 'inactive' where id = $1", [text(formData.get("unitId"))]);
+  await query("update units set status = 'inactive' where id = ?", [text(formData.get("unitId"))]);
   revalidatePath("/admin/units");
 }
 
@@ -110,9 +111,9 @@ export async function saveBillingPeriod(formData: FormData) {
   }
   await ensureSeeded();
   if (periodId) {
-    await query("update billing_periods set name=$1, start_date=$2, end_date=$3, kwh_rate_pence=$4, standing_charge_pence=$5, levy_pence=$6 where id=$7 and status != 'locked'", [...params, periodId]);
+    await query("update billing_periods set name=?, start_date=?, end_date=?, kwh_rate_pence=?, standing_charge_pence=?, levy_pence=? where id=? and status != 'locked'", [...params, periodId]);
   } else {
-    await query("insert into billing_periods (estate_id, name, start_date, end_date, status, kwh_rate_pence, standing_charge_pence, levy_pence) values ($1,$2,$3,$4,'draft',$5,$6,$7)", [estateId, ...params]);
+    await query("insert into billing_periods (id, estate_id, name, start_date, end_date, status, kwh_rate_pence, standing_charge_pence, levy_pence) values (?,?,?,?,?,'draft',?,?,?)", [randomUUID(), estateId, ...params]);
   }
   revalidatePath("/admin/periods");
 }
@@ -129,10 +130,10 @@ export async function saveMeterReading(formData: FormData) {
   await ensureSeeded();
   const usage = calculateUsage(previous, current);
   await query(
-    `insert into meter_readings (billing_period_id, unit_id, previous_reading, current_reading, usage, is_estimated, reading_notes, reading_status, entered_by, entered_at, photo_url)
-     values ($1,$2,$3,$4,$5,$6,$7,'confirmed',(select id from users where role in ('super_admin','admin') order by created_at limit 1),now(),$8)
-     on conflict (billing_period_id, unit_id) do update set previous_reading=$3, current_reading=$4, usage=$5, is_estimated=$6, reading_notes=$7, reading_status='confirmed', entered_by=(select id from users where role in ('super_admin','admin') order by created_at limit 1), entered_at=now(), photo_url=$8`,
-    [text(formData.get("periodId")), text(formData.get("unitId")), previous, current, usage, bool(formData.get("isEstimated")), text(formData.get("readingNotes")) || null, text(formData.get("photoUrl")) || null]
+    `insert into meter_readings (id, billing_period_id, unit_id, previous_reading, current_reading, \`usage\`, is_estimated, reading_notes, reading_status, entered_by, entered_at, photo_url)
+     values (?,?,?,?,?,?,?,?,'confirmed',(select id from users where role in ('super_admin','admin') order by created_at limit 1),utc_timestamp(),?)
+     on duplicate key update previous_reading=values(previous_reading), current_reading=values(current_reading), \`usage\`=values(\`usage\`), is_estimated=values(is_estimated), reading_notes=values(reading_notes), reading_status='confirmed', entered_by=(select id from users where role in ('super_admin','admin') order by created_at limit 1), entered_at=utc_timestamp(), photo_url=values(photo_url)`,
+    [randomUUID(), text(formData.get("periodId")), text(formData.get("unitId")), previous, current, usage, bool(formData.get("isEstimated")), text(formData.get("readingNotes")) || null, text(formData.get("photoUrl")) || null]
   );
   revalidatePath("/admin/readings");
   revalidatePath("/admin/bills/review");
@@ -159,19 +160,19 @@ export async function savePaymentUpdate(input: { billId: string; amountPaidPence
   await ensureSeeded();
   const method = input.paymentMethod.toLowerCase().replaceAll(" ", "_") === "cheque" ? "other" : input.paymentMethod.toLowerCase().replaceAll(" ", "_");
   await transaction(async (client) => {
-    const billResult = await client.query("select * from bills where id = $1", [input.billId]);
+    const billResult = await client.query("select * from bills where id = ?", [input.billId]);
     const bill = billResult.rows[0];
     if (!bill) return;
     const remaining = Math.max(0, bill.rounded_total_pence - input.amountPaidPence);
     const status = input.amountPaidPence >= bill.rounded_total_pence ? "paid" : input.amountPaidPence > 0 ? "part_paid" : "unpaid";
-    await client.query("update bills set amount_paid_pence=$1, remaining_balance_pence=$2, paid_status=$3, payment_date=$4, admin_notes=$5 where id=$6", [input.amountPaidPence, remaining, status, input.paymentDate || null, input.notes || null, input.billId]);
-    await client.query("update units set current_balance_pence=$1 where id=$2", [remaining, bill.unit_id]);
-    await client.query("delete from payments where bill_id = $1", [input.billId]);
+    await client.query("update bills set amount_paid_pence=?, remaining_balance_pence=?, paid_status=?, payment_date=?, admin_notes=? where id=?", [input.amountPaidPence, remaining, status, input.paymentDate || null, input.notes || null, input.billId]);
+    await client.query("update units set current_balance_pence=? where id=?", [remaining, bill.unit_id]);
+    await client.query("delete from payments where bill_id = ?", [input.billId]);
     if (input.amountPaidPence > 0 && input.paymentDate && method) {
       await client.query(
-        `insert into payments (bill_id, unit_id, amount_pence, payment_method, payment_date, notes)
-         values ($1,$2,$3,$4,$5,$6)`,
-        [input.billId, bill.unit_id, input.amountPaidPence, method, input.paymentDate, input.notes || null]
+        `insert into payments (id, bill_id, unit_id, amount_pence, payment_method, payment_date, notes)
+         values (?,?,?,?,?,?,?)`,
+        [randomUUID(), input.billId, bill.unit_id, input.amountPaidPence, method, input.paymentDate, input.notes || null]
       );
     }
   });
@@ -188,8 +189,8 @@ export async function saveSmsLog(formData: FormData) {
   }
   await ensureSeeded();
   await query(
-    `insert into sms_logs (bill_id, unit_id, mobile, message, status, provider, provider_reference, sent_at) values ($1,$2,$3,$4,$5,$6,$7,now())`,
-    [text(formData.get("billId")) || null, text(formData.get("unitId")) || null, text(formData.get("mobile")), text(formData.get("message")), text(formData.get("status")) || "simulated", text(formData.get("provider")) || "mock", text(formData.get("providerReference")) || `mock-${Date.now()}`]
+    `insert into sms_logs (id, bill_id, unit_id, mobile, message, status, provider, provider_reference, sent_at) values (?,?,?,?,?,?,?,?,utc_timestamp())`,
+    [randomUUID(), text(formData.get("billId")) || null, text(formData.get("unitId")) || null, text(formData.get("mobile")), text(formData.get("message")), text(formData.get("status")) || "simulated", text(formData.get("provider")) || "mock", text(formData.get("providerReference")) || `mock-${Date.now()}`]
   );
   revalidatePath("/admin/sms");
 }
@@ -207,16 +208,16 @@ export async function saveReminderForBill(billId: string) {
      from bills b
      join units u on u.id = b.unit_id
      join billing_periods bp on bp.id = b.billing_period_id
-     where b.id = $1`,
+     where b.id = ?`,
     [billId]
   );
   const row = result.rows[0];
   if (!row || row.remaining_balance_pence <= 0) return;
   const amount = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(row.remaining_balance_pence / 100);
   await query(
-    `insert into sms_logs (bill_id, unit_id, mobile, message, status, provider, provider_reference, sent_at)
-     values ($1,$2,$3,$4,'simulated','mock',$5,now())`,
-    [row.bill_id, row.unit_id, row.tenant_mobile || "No mobile", `Reminder: your Yardle electricity bill for ${row.period_name} has ${amount} outstanding.`, `mock-${Date.now()}`]
+    `insert into sms_logs (id, bill_id, unit_id, mobile, message, status, provider, provider_reference, sent_at)
+     values (?,?,?,?,?,'simulated','mock',?,utc_timestamp())`,
+    [randomUUID(), row.bill_id, row.unit_id, row.tenant_mobile || "No mobile", `Reminder: your Yardle electricity bill for ${row.period_name} has ${amount} outstanding.`, `mock-${Date.now()}`]
   );
   revalidatePath("/admin/sms");
   revalidatePath("/admin/landlord");
@@ -229,7 +230,7 @@ export async function regenerateTenantBillLink(formData: FormData) {
   } else {
     await ensureSeeded();
     await query(
-      "update units set tenant_access_token=$1, tenant_access_token_created_at=now(), tenant_access_enabled=true where id=$2",
+      "update units set tenant_access_token=?, tenant_access_token_created_at=utc_timestamp(), tenant_access_enabled=1 where id=?",
       [token, unitId]
     );
   }
@@ -261,8 +262,8 @@ export async function sendTenantBillLinkSms(formData: FormData) {
        from units u
        join bills b on b.unit_id = u.id
        join billing_periods bp on bp.id = b.billing_period_id
-       where u.id = $1
-       order by b.issued_at desc nulls last, b.created_at desc
+       where u.id = ?
+       order by b.issued_at is null, b.issued_at desc, b.created_at desc
        limit 1`,
       [unitId]
     );
@@ -270,9 +271,9 @@ export async function sendTenantBillLinkSms(formData: FormData) {
     if (!row?.tenant_access_enabled || !row.tenant_access_token) return;
     const message = `Your Yardle electricity bill for ${row.period_name} is ready. Total due: ${new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(row.rounded_total_pence / 100)}. View it here: ${getTenantBillUrl(row.tenant_access_token)}`;
     await query(
-      `insert into sms_logs (bill_id, unit_id, mobile, message, status, provider, provider_reference, sent_at)
-       values ($1,$2,$3,$4,'simulated','mock',$5,now())`,
-      [row.bill_id, row.unit_id, row.tenant_mobile || "No mobile", message, `mock-${Date.now()}`]
+      `insert into sms_logs (id, bill_id, unit_id, mobile, message, status, provider, provider_reference, sent_at)
+       values (?,?,?,?,?,'simulated','mock',?,utc_timestamp())`,
+      [randomUUID(), row.bill_id, row.unit_id, row.tenant_mobile || "No mobile", message, `mock-${Date.now()}`]
     );
   }
   revalidatePath("/admin/sms");

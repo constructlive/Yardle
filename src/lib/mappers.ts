@@ -32,14 +32,14 @@ export function mapUnit(row: any): Unit {
     tenantMobile: row.tenant_mobile ?? "",
     status: row.status,
     notes: row.notes ?? undefined,
-    freeSupplyMeter: row.free_supply_meter,
+    freeSupplyMeter: Boolean(row.free_supply_meter),
     customKwhRatePence: row.custom_kwh_rate_pence ?? undefined,
     customStandingChargePence: row.custom_standing_charge_pence ?? undefined,
     openingBalancePence: row.opening_balance_pence,
     currentBalancePence: row.current_balance_pence,
     tenantAccessToken: row.tenant_access_token ?? "",
     tenantAccessTokenCreatedAt: row.tenant_access_token_created_at ? row.tenant_access_token_created_at?.toISOString?.() ?? String(row.tenant_access_token_created_at) : undefined,
-    tenantAccessEnabled: row.tenant_access_enabled ?? false,
+    tenantAccessEnabled: Boolean(row.tenant_access_enabled),
     createdAt: row.created_at?.toISOString?.() ?? String(row.created_at)
   };
 }
@@ -69,7 +69,7 @@ export function mapMeterReading(row: any): MeterReading {
     previousReading: Number(row.previous_reading),
     currentReading: Number(row.current_reading),
     usage: Number(row.usage),
-    isEstimated: row.is_estimated,
+    isEstimated: Boolean(row.is_estimated),
     readingNotes: row.reading_notes ?? undefined,
     readingStatus: row.reading_status,
     enteredBy: row.entered_by ?? "",

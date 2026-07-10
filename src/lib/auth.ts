@@ -7,7 +7,7 @@ export async function getDemoUser(role: Role = "admin"): Promise<User> {
 }
 
 export function canAccessAdmin(role: Role): boolean {
-  return role === "super_admin" || role === "admin";
+  return role === "super_admin" || role === "landlord_admin" || role === "admin";
 }
 
 export function canAccessTenant(role: Role): boolean {
