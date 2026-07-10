@@ -117,6 +117,9 @@ export interface Payment {
   paymentDate: string;
   notes?: string;
   recordedBy: string;
+  reversedAt?: string;
+  reversedBy?: string;
+  reversalReason?: string;
   createdAt: string;
 }
 

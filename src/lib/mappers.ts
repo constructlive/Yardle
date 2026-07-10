@@ -117,6 +117,9 @@ export function mapPayment(row: any): Payment {
     paymentDate: row.payment_date?.toISOString?.().slice(0, 10) ?? String(row.payment_date).slice(0, 10),
     notes: row.notes ?? undefined,
     recordedBy: row.recorded_by ?? "",
+    reversedAt: row.reversed_at ? row.reversed_at?.toISOString?.() ?? String(row.reversed_at) : undefined,
+    reversedBy: row.reversed_by ?? undefined,
+    reversalReason: row.reversal_reason ?? undefined,
     createdAt: row.created_at?.toISOString?.() ?? String(row.created_at)
   };
 }

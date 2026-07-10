@@ -119,6 +119,8 @@ export async function ensureSeeded() {
     modify tenant_access_token varchar(128) not null,
     modify tenant_access_token_created_at datetime not null default current_timestamp,
     modify tenant_access_enabled tinyint(1) not null default 0`);
+  await database.execute(`alter table payments add column if not exists reversed_at datetime after recorded_by, add column if not exists reversed_by char(36) after reversed_at, add column if not exists reversal_reason text after reversed_by`);
+  await database.execute(`create index if not exists idx_payments_bill_active on payments (bill_id, reversed_at)`);
   await database.execute(`alter table sms_logs add column if not exists failure_reason text after provider_reference`);
   await database.execute(`create table if not exists historical_import_batches (
     id char(36) primary key,

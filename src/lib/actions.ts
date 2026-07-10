@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { calculateUsage } from "./billing";
+import { paymentTotals } from "./payment-accounting";
 import { createBillsForPeriod, getAppData } from "./data";
 import { ensureSeeded, hasDatabaseUrl, query, transaction } from "./db";
 import { serializeTenantMeta } from "./tenant-meta";
@@ -199,36 +200,91 @@ export async function issueBills(formData: FormData) {
 }
 
 export async function savePaymentUpdate(input: { billId: string; amountPaidPence: number; paymentMethod: string; paymentDate: string; notes: string }) {
-  await requireAdminSession();
+  const session = await requireAdminSession();
   if (!hasDatabaseUrl()) {
     saveDemoPaymentUpdate(input);
     revalidatePath("/admin/payments");
     revalidatePath("/admin/landlord");
     revalidatePath("/admin/bills");
-    return;
+    return { ok: true, message: "Payment saved in Demo Mode." };
   }
   await ensureSeeded();
-  const method = input.paymentMethod.toLowerCase().replaceAll(" ", "_") === "cheque" ? "other" : input.paymentMethod.toLowerCase().replaceAll(" ", "_");
+  const normalized = input.paymentMethod.trim().toLowerCase().replaceAll(" ", "_");
+  const method = normalized === "cheque" ? "other" : normalized;
+  if (input.amountPaidPence < 0) return { ok: false, message: "Payment amount cannot be negative." };
+  if (input.amountPaidPence > 0 && !method) return { ok: false, message: "Choose a payment method before saving payment." };
+  if (input.amountPaidPence > 0 && !input.paymentDate) return { ok: false, message: "Choose a payment date before saving payment." };
+
+  let response = { ok: true, message: "Payment saved." };
   await transaction(async (client) => {
-    const billResult = await client.query("select * from bills where id = ?", [input.billId]);
+    const billResult = await client.query("select * from bills where id = ? for update", [input.billId]);
     const bill = billResult.rows[0];
-    if (!bill) return;
-    const remaining = Math.max(0, bill.rounded_total_pence - input.amountPaidPence);
-    const status = input.amountPaidPence >= bill.rounded_total_pence ? "paid" : input.amountPaidPence > 0 ? "part_paid" : "unpaid";
-    await client.query("update bills set amount_paid_pence=?, remaining_balance_pence=?, paid_status=?, payment_date=?, admin_notes=? where id=?", [input.amountPaidPence, remaining, status, input.paymentDate || null, input.notes || null, input.billId]);
-    await client.query("update units set current_balance_pence=? where id=?", [remaining, bill.unit_id]);
-    await client.query("delete from payments where bill_id = ?", [input.billId]);
-    if (input.amountPaidPence > 0 && input.paymentDate && method) {
+    if (!bill) {
+      response = { ok: false, message: "Bill not found." };
+      return;
+    }
+    const paymentsResult = await client.query("select * from payments where bill_id = ? and reversed_at is null for update", [input.billId]);
+    const currentPaid = paymentsResult.rows.reduce((sum, payment) => sum + Number(payment.amount_pence), 0);
+    const desiredPaid = Math.min(input.amountPaidPence, Number(bill.rounded_total_pence));
+    const delta = desiredPaid - currentPaid;
+    if (delta < 0) {
+      response = { ok: false, message: "Use Reverse payment to reduce a recorded payment." };
+      return;
+    }
+    if (delta > 0) {
       await client.query(
-        `insert into payments (id, bill_id, unit_id, amount_pence, payment_method, payment_date, notes)
-         values (?,?,?,?,?,?,?)`,
-        [randomUUID(), input.billId, bill.unit_id, input.amountPaidPence, method, input.paymentDate, input.notes || null]
+        `insert into payments (id, bill_id, unit_id, amount_pence, payment_method, payment_date, notes, recorded_by)
+         values (?,?,?,?,?,?,?,?)`,
+        [randomUUID(), input.billId, bill.unit_id, delta, method || "other", input.paymentDate, input.notes || null, session.userId]
       );
     }
+    const updatedPayments = await client.query("select * from payments where bill_id = ? and reversed_at is null", [input.billId]);
+    const active = updatedPayments.rows.map((payment) => ({ id: payment.id, billId: payment.bill_id, unitId: payment.unit_id, amountPence: Number(payment.amount_pence), paymentMethod: payment.payment_method, paymentDate: String(payment.payment_date).slice(0, 10), notes: payment.notes ?? undefined, recordedBy: payment.recorded_by ?? "", createdAt: String(payment.created_at) }));
+    const totals = paymentTotals(Number(bill.rounded_total_pence), active as any);
+    await client.query("update bills set amount_paid_pence=?, remaining_balance_pence=?, paid_status=?, payment_date=?, admin_notes=? where id=?", [totals.amountPaidPence, totals.remainingBalancePence, totals.paidStatus, totals.paymentDate || null, input.notes || null, input.billId]);
+    await client.query("update units set current_balance_pence=? where id=?", [totals.remainingBalancePence, bill.unit_id]);
   });
   revalidatePath("/admin/payments");
   revalidatePath("/admin/landlord");
   revalidatePath("/admin/bills");
+  return response;
+}
+
+export async function reversePayment(input: { paymentId: string; reason?: string }) {
+  const session = await requireAdminSession();
+  if (!hasDatabaseUrl()) {
+    return { ok: false, message: "Payment reversal is available when Yardle is connected to MariaDB." };
+  }
+  await ensureSeeded();
+  let response = { ok: true, message: "Payment reversed." };
+  await transaction(async (client) => {
+    const paymentResult = await client.query("select * from payments where id = ? for update", [input.paymentId]);
+    const payment = paymentResult.rows[0];
+    if (!payment) {
+      response = { ok: false, message: "Payment not found." };
+      return;
+    }
+    if (payment.reversed_at) {
+      response = { ok: false, message: "This payment has already been reversed." };
+      return;
+    }
+    const billResult = await client.query("select * from bills where id = ? for update", [payment.bill_id]);
+    const bill = billResult.rows[0];
+    if (!bill) {
+      response = { ok: false, message: "Bill not found." };
+      return;
+    }
+    await client.query("update payments set reversed_at=utc_timestamp(), reversed_by=?, reversal_reason=? where id=? and reversed_at is null", [session.userId, input.reason || "Landlord correction", input.paymentId]);
+    const activeResult = await client.query("select * from payments where bill_id = ? and reversed_at is null", [payment.bill_id]);
+    const active = activeResult.rows.map((item) => ({ id: item.id, billId: item.bill_id, unitId: item.unit_id, amountPence: Number(item.amount_pence), paymentMethod: item.payment_method, paymentDate: String(item.payment_date).slice(0, 10), notes: item.notes ?? undefined, recordedBy: item.recorded_by ?? "", createdAt: String(item.created_at) }));
+    const totals = paymentTotals(Number(bill.rounded_total_pence), active as any);
+    await client.query("update bills set amount_paid_pence=?, remaining_balance_pence=?, paid_status=?, payment_date=? where id=?", [totals.amountPaidPence, totals.remainingBalancePence, totals.paidStatus, totals.paymentDate || null, payment.bill_id]);
+    await client.query("update units set current_balance_pence=? where id=?", [totals.remainingBalancePence, bill.unit_id]);
+  });
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/landlord");
+  revalidatePath("/admin/bills");
+  return response;
 }
 
 export async function saveSmsLog(formData: FormData) {

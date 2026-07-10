@@ -134,6 +134,7 @@ create table if not exists payments (
   constraint fk_payments_bill foreign key (bill_id) references bills(id) on delete cascade,
   constraint fk_payments_unit foreign key (unit_id) references units(id) on delete cascade,
   constraint fk_payments_recorded_by foreign key (recorded_by) references users(id) on delete set null,
+  constraint fk_payments_reversed_by foreign key (reversed_by) references users(id) on delete set null,
   constraint chk_payments_amount check (amount_pence > 0),
   constraint chk_payments_method check (payment_method in ('cash', 'bank_transfer', 'card', 'other'))
 ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
@@ -227,3 +228,5 @@ create index idx_payments_bill on payments (bill_id);
 create index idx_sms_logs_created_at on sms_logs (created_at);
 create index idx_historical_bills_unit_period on historical_bills (unit_id, billing_period_start, billing_period_end);
 create index idx_historical_import_batches_uploaded on historical_import_batches (uploaded_at);
+
+create index idx_payments_bill_active on payments (bill_id, reversed_at);
