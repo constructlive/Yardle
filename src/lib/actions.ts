@@ -10,6 +10,7 @@ import { serializeTenantMeta } from "./tenant-meta";
 import { createTenantAccessToken, getTenantBillUrl } from "./secure-link";
 import { buildBillSms } from "./sms";
 import { sendAndLogSms } from "./sms-logging";
+import { commitHistoricalImport, previewHistoricalImport, type HistoricalImportCommitState, type HistoricalImportPreviewState, type HistoricalImportPreviewRow } from "./historical-import";
 import { requireAdminSession } from "./session";
 import { archiveDemoUnit, regenerateDemoTenantAccessToken, saveDemoBillingPeriod, saveDemoEstate, saveDemoMeterReading, saveDemoPaymentUpdate, saveDemoUnit } from "./demo-store";
 
@@ -31,6 +32,34 @@ function numberValue(value: FormDataEntryValue | null) {
   return raw ? Number(raw) : 0;
 }
 
+export async function previewHistoricalImportAction(_previousState: HistoricalImportPreviewState, formData: FormData): Promise<HistoricalImportPreviewState> {
+  await requireAdminSession();
+  const data = await getAppData();
+  const fallbackYearRaw = text(formData.get("fallbackYear"));
+  const fallbackYear = fallbackYearRaw ? Number(fallbackYearRaw) : undefined;
+  const files = await Promise.all(
+    formData.getAll("files").filter((value): value is File => value instanceof File && value.size > 0).map(async (file) => ({
+      name: file.name,
+      buffer: Buffer.from(await file.arrayBuffer())
+    }))
+  );
+  return previewHistoricalImport({ files, units: data.units, fallbackYear: fallbackYear && Number.isFinite(fallbackYear) ? fallbackYear : undefined });
+}
+
+export async function confirmHistoricalImportAction(_previousState: HistoricalImportCommitState, formData: FormData): Promise<HistoricalImportCommitState> {
+  const session = await requireAdminSession();
+  const data = await getAppData();
+  const rowsJson = text(formData.get("rows"));
+  if (!rowsJson) return { ok: false, message: "Preview the import before confirming.", imported: 0, skipped: 0, duplicate: 0, failed: 0 };
+  try {
+    const rows = JSON.parse(rowsJson) as HistoricalImportPreviewRow[];
+    const result = await commitHistoricalImport({ rows, estateId: data.estate.id, session });
+    revalidatePath("/admin/import");
+    return result;
+  } catch {
+    return { ok: false, message: "The import preview could not be read. Please preview the files again.", imported: 0, skipped: 0, duplicate: 0, failed: 0 };
+  }
+}
 export async function saveEstateSettings(formData: FormData) {
   await requireAdminSession();
   if (!hasDatabaseUrl()) {

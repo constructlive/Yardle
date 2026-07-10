@@ -155,6 +155,56 @@ create table if not exists sms_logs (
   constraint chk_sms_logs_status check (status in ('queued', 'sent', 'failed', 'simulated'))
 ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
 
+create table if not exists historical_import_batches (
+  id char(36) primary key,
+  estate_id char(36) not null,
+  filenames text not null,
+  uploaded_by char(36),
+  uploaded_at datetime not null default current_timestamp,
+  total_rows int not null default 0,
+  imported_rows int not null default 0,
+  skipped_rows int not null default 0,
+  failed_rows int not null default 0,
+  status varchar(32) not null default 'preview',
+  created_at datetime not null default current_timestamp,
+  constraint fk_historical_import_batches_estate foreign key (estate_id) references estates(id) on delete cascade,
+  constraint fk_historical_import_batches_user foreign key (uploaded_by) references users(id) on delete set null
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+
+create table if not exists historical_bills (
+  id char(36) primary key,
+  import_batch_id char(36) not null,
+  estate_id char(36) not null,
+  unit_id char(36) not null,
+  billing_period_start date not null,
+  billing_period_end date not null,
+  source_filename text not null,
+  source_row_number int not null,
+  imported_unit_reference varchar(64) not null,
+  matched_unit_reference varchar(64) not null,
+  historical_tenant_name varchar(255),
+  previous_reading decimal(12,2),
+  current_reading decimal(12,2),
+  units_used decimal(12,2),
+  unit_rate_pence int,
+  levy_pence int,
+  standing_charge_pence int,
+  usage_charge_pence int,
+  subtotal_pence int,
+  outstanding_balance_pence int,
+  total_due_pence int,
+  paid_status varchar(32) not null default 'unpaid',
+  notes text,
+  occupancy_snapshot varchar(32),
+  source_payload json,
+  imported_at datetime not null default current_timestamp,
+  created_at datetime not null default current_timestamp,
+  unique key uq_historical_bill_estate_unit_period (estate_id, unit_id, billing_period_start, billing_period_end),
+  constraint fk_historical_bills_batch foreign key (import_batch_id) references historical_import_batches(id) on delete cascade,
+  constraint fk_historical_bills_estate foreign key (estate_id) references estates(id) on delete cascade,
+  constraint fk_historical_bills_unit foreign key (unit_id) references units(id) on delete cascade,
+  constraint chk_historical_bills_paid_status check (paid_status in ('unpaid', 'part_paid', 'paid', 'credited'))
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
 create table if not exists settings (
   id char(36) primary key,
   setting_key varchar(128) not null unique,
@@ -175,3 +225,5 @@ create index idx_bills_unit_issued on bills (unit_id, issued_at);
 create index idx_payments_unit_date on payments (unit_id, payment_date);
 create index idx_payments_bill on payments (bill_id);
 create index idx_sms_logs_created_at on sms_logs (created_at);
+create index idx_historical_bills_unit_period on historical_bills (unit_id, billing_period_start, billing_period_end);
+create index idx_historical_import_batches_uploaded on historical_import_batches (uploaded_at);

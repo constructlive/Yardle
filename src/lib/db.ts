@@ -120,6 +120,51 @@ export async function ensureSeeded() {
     modify tenant_access_token_created_at datetime not null default current_timestamp,
     modify tenant_access_enabled tinyint(1) not null default 0`);
   await database.execute(`alter table sms_logs add column if not exists failure_reason text after provider_reference`);
+  await database.execute(`create table if not exists historical_import_batches (
+    id char(36) primary key,
+    estate_id char(36) not null,
+    filenames text not null,
+    uploaded_by char(36),
+    uploaded_at datetime not null default current_timestamp,
+    total_rows int not null default 0,
+    imported_rows int not null default 0,
+    skipped_rows int not null default 0,
+    failed_rows int not null default 0,
+    status varchar(32) not null default 'preview',
+    created_at datetime not null default current_timestamp
+  ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci`);
+  await database.execute(`create table if not exists historical_bills (
+    id char(36) primary key,
+    import_batch_id char(36) not null,
+    estate_id char(36) not null,
+    unit_id char(36) not null,
+    billing_period_start date not null,
+    billing_period_end date not null,
+    source_filename text not null,
+    source_row_number int not null,
+    imported_unit_reference varchar(64) not null,
+    matched_unit_reference varchar(64) not null,
+    historical_tenant_name varchar(255),
+    previous_reading decimal(12,2),
+    current_reading decimal(12,2),
+    units_used decimal(12,2),
+    unit_rate_pence int,
+    levy_pence int,
+    standing_charge_pence int,
+    usage_charge_pence int,
+    subtotal_pence int,
+    outstanding_balance_pence int,
+    total_due_pence int,
+    paid_status varchar(32) not null default 'unpaid',
+    notes text,
+    occupancy_snapshot varchar(32),
+    source_payload json,
+    imported_at datetime not null default current_timestamp,
+    created_at datetime not null default current_timestamp,
+    unique key uq_historical_bill_estate_unit_period (estate_id, unit_id, billing_period_start, billing_period_end)
+  ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci`);
+  await database.execute(`create index if not exists idx_historical_bills_unit_period on historical_bills (unit_id, billing_period_start, billing_period_end)`);
+  await database.execute(`create index if not exists idx_historical_import_batches_uploaded on historical_import_batches (uploaded_at)`);
   await database.execute(`create unique index if not exists idx_units_tenant_access_token on units (tenant_access_token)`);
   schemaChecked = true;
 }

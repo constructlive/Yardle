@@ -58,5 +58,6 @@ The script prompts for name, email, password, and role, hashes the password with
 
 - Public tenant bill links remain passwordless and are stored as unique secure tokens on `units`.
 - Money is stored as integer pence.
+- Historical Anderson Yard imports are stored separately in `historical_import_batches` and `historical_bills` with `historical_tenant_name`; they do not alter live units, tenants, balances, readings, bills, or SMS logs.
 - Timestamps are stored as UTC `DATETIME` values.
 - Leave `DATABASE_URL` unset in local development to use Yardle Demo Mode.
