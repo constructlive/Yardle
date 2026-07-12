@@ -21,7 +21,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: {
   const readingsMissing = period ? Math.max(0, requiredUnits.length - readingsComplete) : requiredUnits.length;
   const readyToIssue = Boolean(period && period.status === "draft" && requiredUnits.length > 0 && readingsMissing === 0);
   const periodBills = period ? bills.filter((bill) => bill.billingPeriodId === period.id) : [];
-  const totalOutstanding = bills.reduce((sum, bill) => sum + bill.remainingBalancePence, 0);
+  const totalOutstanding = bills.reduce((sum, bill) => sum + Math.max(0, bill.remainingBalancePence), 0);
   const latestIssued = billingPeriods.filter((item) => item.issuedAt).sort((a, b) => String(b.issuedAt).localeCompare(String(a.issuedAt)))[0];
   const billingStatus = !period ? "No active period" : readyToIssue ? "Ready to Issue" : period.status === "draft" ? "Draft" : "Issued";
   const billingHint = !period ? "Create a billing period to begin" : readingsMissing ? `${readingsMissing} readings missing` : latestIssued?.issuedAt ? `Last issued ${new Date(latestIssued.issuedAt).toLocaleString("en-GB")}` : requiredUnits.length ? "All readings complete" : "No active meters";

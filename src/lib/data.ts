@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { calculateBill } from "./billing";
 import { sendAndLogSms } from "./sms-logging";
 import { renderSmsTemplate } from "./sms-templates";
+import { formatAccountBalance } from "./money";
 import { nextPeriodDetails } from "./period-cycle";
 import { getPaymentInstructions } from "./payment-instructions";
 import { ensureSeeded, hasDatabaseUrl, query, transaction } from "./db";
@@ -132,9 +133,9 @@ export async function createBillsForPeriod(periodId: string) {
       const billId = randomUUID();
       await client.query(
         `insert into bills (id, billing_period_id, unit_id, previous_reading, current_reading, \`usage\`, kwh_rate_pence, standing_charge_pence, levy_pence, usage_cost_pence, subtotal_pence, outstanding_carried_forward_pence, total_due_pence, rounded_total_pence, amount_paid_pence, remaining_balance_pence, paid_status, admin_notes, tenant_notes, pdf_url, issued_at, sms_sent_at, created_at)
-         values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,'unpaid',?,?,?,utc_timestamp(),utc_timestamp(),utc_timestamp())
-         on duplicate key update previous_reading = values(previous_reading), current_reading = values(current_reading), \`usage\` = values(\`usage\`), kwh_rate_pence = values(kwh_rate_pence), standing_charge_pence = values(standing_charge_pence), levy_pence = values(levy_pence), usage_cost_pence = values(usage_cost_pence), subtotal_pence = values(subtotal_pence), outstanding_carried_forward_pence = values(outstanding_carried_forward_pence), total_due_pence = values(total_due_pence), rounded_total_pence = values(rounded_total_pence), remaining_balance_pence = values(remaining_balance_pence), tenant_notes = values(tenant_notes), pdf_url = values(pdf_url), issued_at = values(issued_at), sms_sent_at = utc_timestamp()`,
-        [billId, period.id, unit.id, bill.previousReading, bill.currentReading, bill.usage, bill.kwhRatePence, bill.standingChargePence, bill.levyPence, bill.usageCostPence, bill.subtotalPence, bill.outstandingCarriedForwardPence, bill.totalDuePence, bill.roundedTotalPence, bill.remainingBalancePence, bill.adminNotes ?? null, bill.tenantNotes ?? null, unit.tenantAccessToken ? `/bill/${unit.tenantAccessToken}` : null]
+         values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,utc_timestamp(),utc_timestamp(),utc_timestamp())
+         on duplicate key update previous_reading = values(previous_reading), current_reading = values(current_reading), \`usage\` = values(\`usage\`), kwh_rate_pence = values(kwh_rate_pence), standing_charge_pence = values(standing_charge_pence), levy_pence = values(levy_pence), usage_cost_pence = values(usage_cost_pence), subtotal_pence = values(subtotal_pence), outstanding_carried_forward_pence = values(outstanding_carried_forward_pence), total_due_pence = values(total_due_pence), rounded_total_pence = values(rounded_total_pence), amount_paid_pence = values(amount_paid_pence), remaining_balance_pence = values(remaining_balance_pence), paid_status = values(paid_status), tenant_notes = values(tenant_notes), pdf_url = values(pdf_url), issued_at = values(issued_at), sms_sent_at = utc_timestamp()`,
+        [billId, period.id, unit.id, bill.previousReading, bill.currentReading, bill.usage, bill.kwhRatePence, bill.standingChargePence, bill.levyPence, bill.usageCostPence, bill.subtotalPence, bill.outstandingCarriedForwardPence, bill.totalDuePence, bill.roundedTotalPence, bill.amountPaidPence, bill.remainingBalancePence, bill.paidStatus, bill.adminNotes ?? null, bill.tenantNotes ?? null, unit.tenantAccessToken ? `/bill/${unit.tenantAccessToken}` : null]
       );
       if (unit.tenantAccessEnabled && unit.tenantAccessToken && unit.tenantMobile) {
         const billRow = await client.query<{ id: string }>("select id from bills where billing_period_id = ? and unit_id = ? limit 1", [period.id, unit.id]);
@@ -148,7 +149,7 @@ export async function createBillsForPeriod(periodId: string) {
               tenantName: unit.tenantName || "Tenant",
               unitNumber: unit.unitReference,
               billType: period.name,
-              amount: new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(bill.roundedTotalPence / 100),
+              amount: formatAccountBalance(bill.remainingBalancePence),
               dueDate: period.endDate,
               paymentLink: `${(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")}/bill/${unit.tenantAccessToken}`
             }, client)
@@ -217,4 +218,6 @@ export async function getPublicBillData(token: string): Promise<PublicBillData |
     paymentInstructions
   };
 }
+
+
 

@@ -182,10 +182,10 @@ export function saveDemoPaymentUpdate(input: { billId: string; amountPaidPence: 
   const bill = demoData.bills.find((item) => item.id === input.billId);
   if (!bill) return;
 
-  const remaining = Math.max(0, bill.roundedTotalPence - input.amountPaidPence);
+  const remaining = bill.roundedTotalPence - input.amountPaidPence;
   bill.amountPaidPence = input.amountPaidPence;
   bill.remainingBalancePence = remaining;
-  bill.paidStatus = input.amountPaidPence >= bill.roundedTotalPence ? "paid" : input.amountPaidPence > 0 ? "part_paid" : "unpaid";
+  bill.paidStatus = remaining < 0 ? "credited" : remaining === 0 ? "paid" : input.amountPaidPence > 0 ? "part_paid" : "unpaid";
   bill.paymentDate = input.paymentDate || undefined;
   bill.adminNotes = input.notes || undefined;
 
@@ -232,5 +232,6 @@ export function addDemoSmsLog(input: { billId?: string; unitId?: string; mobile:
     createdAt: new Date().toISOString()
   });
 }
+
 
 

@@ -235,7 +235,7 @@ export async function savePaymentUpdate(input: { billId: string; amountPaidPence
     }
     const paymentsResult = await client.query("select * from payments where bill_id = ? and reversed_at is null for update", [input.billId]);
     const currentPaid = paymentsResult.rows.reduce((sum, payment) => sum + Number(payment.amount_pence), 0);
-    const desiredPaid = Math.min(input.amountPaidPence, Number(bill.rounded_total_pence));
+    const desiredPaid = input.amountPaidPence;
     const delta = desiredPaid - currentPaid;
     if (delta < 0) {
       response = { ok: false, message: "Use Reverse payment to reduce a recorded payment." };

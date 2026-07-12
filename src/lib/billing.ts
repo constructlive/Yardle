@@ -27,6 +27,8 @@ export function calculateBill(input: BillInput): Bill {
   const totalDuePence = subtotalPence + outstandingCarriedForwardPence;
   const roundedTotalPence = Math.round(totalDuePence / 100) * 100;
 
+  const initialPaidStatus = roundedTotalPence < 0 ? "credited" : "unpaid";
+
   return {
     id: `bill-${input.period.id}-${input.unit.id}`,
     billingPeriodId: input.period.id,
@@ -44,7 +46,7 @@ export function calculateBill(input: BillInput): Bill {
     roundedTotalPence,
     amountPaidPence: 0,
     remainingBalancePence: roundedTotalPence,
-    paidStatus: "unpaid",
+    paidStatus: initialPaidStatus,
     adminNotes: input.adminNotes,
     tenantNotes: input.unit.freeSupplyMeter ? "Free supply meter" : undefined,
     pdfUrl: input.unit.tenantAccessToken ? `/bill/${input.unit.tenantAccessToken}` : undefined,
@@ -56,12 +58,12 @@ export function calculateBill(input: BillInput): Bill {
 
 export function applyPayment(bill: Bill, paymentPence: number): Bill {
   const amountPaidPence = bill.amountPaidPence + paymentPence;
-  const remainingBalancePence = Math.max(0, bill.roundedTotalPence - amountPaidPence);
+  const remainingBalancePence = bill.roundedTotalPence - amountPaidPence;
   return {
     ...bill,
     amountPaidPence,
     remainingBalancePence,
-    paidStatus: remainingBalancePence === 0 ? "paid" : amountPaidPence > 0 ? "part_paid" : "unpaid",
+    paidStatus: remainingBalancePence < 0 ? "credited" : remainingBalancePence === 0 ? "paid" : amountPaidPence > 0 ? "part_paid" : "unpaid",
     paymentDate: new Date().toISOString().slice(0, 10)
   };
 }
@@ -74,8 +76,13 @@ export function periodTotals(bills: Bill[]) {
     outstandingPence: bills.reduce((sum, bill) => sum + bill.outstandingCarriedForwardPence, 0),
     duePence: bills.reduce((sum, bill) => sum + bill.roundedTotalPence, 0),
     paidPence: bills.reduce((sum, bill) => sum + bill.amountPaidPence, 0),
-    unpaidPence: bills.reduce((sum, bill) => sum + bill.remainingBalancePence, 0),
+    unpaidPence: bills.reduce((sum, bill) => sum + Math.max(0, bill.remainingBalancePence), 0),
     usage: bills.reduce((sum, bill) => sum + bill.usage, 0)
   };
 }
+
+
+
+
+
 

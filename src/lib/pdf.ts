@@ -1,4 +1,4 @@
-﻿import { formatMoney, formatNumber } from "./money";
+import { formatAccountBalance, formatMoney, formatNumber } from "./money";
 import { DEFAULT_PAYMENT_INSTRUCTIONS, renderPaymentInstructions } from "./payment-instructions";
 import type { Bill, BillingPeriod, Estate, Unit } from "./types";
 
@@ -25,7 +25,7 @@ export function generateBillHtml(estate: Estate, unit: Unit, period: BillingPeri
     estateName: estate.name,
     tenantName: unit.tenantName || "Tenant",
     unitNumber: unit.unitReference,
-    amount: formatMoney(bill.remainingBalancePence),
+    amount: formatAccountBalance(bill.remainingBalancePence),
     paymentLink: ""
   });
 
@@ -67,7 +67,7 @@ export function generateBillHtml(estate: Estate, unit: Unit, period: BillingPeri
       <tr><th>Price per kWh</th><td>${formatMoney(bill.kwhRatePence)}</td></tr>
       <tr><th>Standing charge</th><td>${formatMoney(bill.standingChargePence)}</td></tr>
       <tr><th>Levy</th><td>${formatMoney(bill.levyPence)}</td></tr>
-      <tr><th>Outstanding balance</th><td>${formatMoney(bill.outstandingCarriedForwardPence)}</td></tr>
+      <tr><th>Opening balance</th><td>${formatAccountBalance(bill.outstandingCarriedForwardPence)}</td></tr>
       <tr><th>Total due</th><td class="total">${formatMoney(bill.roundedTotalPence)}</td></tr>
     </tbody>
   </table>
@@ -80,3 +80,5 @@ export function generateBillHtml(estate: Estate, unit: Unit, period: BillingPeri
 </body>
 </html>`;
 }
+
+

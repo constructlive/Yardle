@@ -88,14 +88,17 @@ export function Td({ children, strong }: { children: ReactNode; strong?: boolean
   return <td className={`whitespace-nowrap px-4 py-4 ${strong ? "font-bold text-ink" : "text-secondaryText"}`}>{children}</td>;
 }
 
-export function StatusPill({ children, tone = "neutral" }: { children: ReactNode; tone?: "good" | "warn" | "bad" | "neutral" }) {
+export function StatusPill({ children, tone = "neutral" }: { children: ReactNode; tone?: "good" | "warn" | "bad" | "info" | "neutral" }) {
   const tones = {
     good: "bg-estate-500/15 text-estate-500 ring-1 ring-estate-500/25",
     warn: "bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/25",
     bad: "bg-red-500/15 text-red-400 ring-1 ring-red-500/25",
+    info: "bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/25",
     neutral: "bg-white/5 text-secondaryText ring-1 ring-white/10"
   };
   return <span className={`rounded-full px-3 py-1 text-xs font-bold ${tones[tone]}`}>{children}</span>;
 }
+
+
 
 

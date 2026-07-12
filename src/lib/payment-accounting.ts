@@ -7,8 +7,12 @@ export function activePayments(payments: Payment[]) {
 export function paymentTotals(totalDuePence: number, payments: Payment[]) {
   const active = activePayments(payments);
   const amountPaidPence = active.reduce((sum, payment) => sum + payment.amountPence, 0);
-  const remainingBalancePence = Math.max(0, totalDuePence - amountPaidPence);
-  const paidStatus: PaidStatus = amountPaidPence >= totalDuePence ? "paid" : amountPaidPence > 0 ? "part_paid" : "unpaid";
+  const remainingBalancePence = totalDuePence - amountPaidPence;
+  const paidStatus: PaidStatus =
+    remainingBalancePence < 0 ? "credited" :
+      remainingBalancePence === 0 ? "paid" :
+        amountPaidPence > 0 ? "part_paid" :
+          "unpaid";
   const paymentDate = active.length ? active.map((payment) => payment.paymentDate).sort().at(-1) : undefined;
   return { amountPaidPence, remainingBalancePence, paidStatus, paymentDate };
 }
@@ -19,3 +23,4 @@ export function reversePaymentPreview(totalDuePence: number, payments: Payment[]
   const remaining = activePayments(payments).filter((payment) => payment.id !== paymentId);
   return { target, ...paymentTotals(totalDuePence, remaining) };
 }
+
