@@ -8,10 +8,24 @@ function ordinal(day: number) {
   return `${day}th`;
 }
 
+function assertValidDate(date: Date, fieldName: string) {
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Cannot create the next billing period because ${fieldName} is not a valid date.`);
+  }
+}
+
 export function nextPeriodDetails(period: BillingPeriod) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(period.endDate)) {
+    throw new Error("Cannot create the next billing period because the current period end date is missing or invalid.");
+  }
+
   const start = new Date(`${period.endDate}T12:00:00Z`);
+  assertValidDate(start, "the current period end date");
   start.setUTCDate(start.getUTCDate() + 1);
+
   const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0, 12));
+  assertValidDate(end, "the next period end date");
+
   const month = start.toLocaleString("en-GB", { month: "long", timeZone: "UTC" });
   const endMonth = end.toLocaleString("en-GB", { month: "long", timeZone: "UTC" });
 

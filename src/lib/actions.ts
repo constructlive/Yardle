@@ -197,7 +197,13 @@ export async function saveMeterReading(formData: FormData) {
 
 export async function issueBills(formData: FormData) {
   await requireAdminSession();
-  await createBillsForPeriod(text(formData.get("periodId")));
+  const periodId = text(formData.get("periodId"));
+  try {
+    await createBillsForPeriod(periodId);
+  } catch (error) {
+    const message = error instanceof Error && error.message ? error.message : "Bills could not be issued.";
+    redirect(`/admin/bills/review?periodId=${encodeURIComponent(periodId)}&error=${encodeURIComponent(message)}`);
+  }
   revalidatePath("/admin/bills");
   revalidatePath("/admin/bills/review");
   revalidatePath("/admin/periods");

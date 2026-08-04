@@ -112,6 +112,8 @@ export async function createBillsForPeriod(periodId: string) {
   }
 
   await ensureSeeded();
+  const smsRequests: Array<{ billId: string; unitId: string; mobile: string; message: string }> = [];
+
   await transaction(async (client) => {
     const periodResult = await client.query("select * from billing_periods where id = ?", [periodId]);
     if (!periodResult.rows[0]) throw new Error("Billing period not found.");
@@ -133,29 +135,26 @@ export async function createBillsForPeriod(periodId: string) {
       const billId = randomUUID();
       await client.query(
         `insert into bills (id, billing_period_id, unit_id, previous_reading, current_reading, \`usage\`, kwh_rate_pence, standing_charge_pence, levy_pence, usage_cost_pence, subtotal_pence, outstanding_carried_forward_pence, total_due_pence, rounded_total_pence, amount_paid_pence, remaining_balance_pence, paid_status, admin_notes, tenant_notes, pdf_url, issued_at, sms_sent_at, created_at)
-         values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,utc_timestamp(),utc_timestamp(),utc_timestamp())
+         values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,utc_timestamp(),utc_timestamp(),utc_timestamp())
          on duplicate key update previous_reading = values(previous_reading), current_reading = values(current_reading), \`usage\` = values(\`usage\`), kwh_rate_pence = values(kwh_rate_pence), standing_charge_pence = values(standing_charge_pence), levy_pence = values(levy_pence), usage_cost_pence = values(usage_cost_pence), subtotal_pence = values(subtotal_pence), outstanding_carried_forward_pence = values(outstanding_carried_forward_pence), total_due_pence = values(total_due_pence), rounded_total_pence = values(rounded_total_pence), amount_paid_pence = values(amount_paid_pence), remaining_balance_pence = values(remaining_balance_pence), paid_status = values(paid_status), tenant_notes = values(tenant_notes), pdf_url = values(pdf_url), issued_at = values(issued_at), sms_sent_at = utc_timestamp()`,
         [billId, period.id, unit.id, bill.previousReading, bill.currentReading, bill.usage, bill.kwhRatePence, bill.standingChargePence, bill.levyPence, bill.usageCostPence, bill.subtotalPence, bill.outstandingCarriedForwardPence, bill.totalDuePence, bill.roundedTotalPence, bill.amountPaidPence, bill.remainingBalancePence, bill.paidStatus, bill.adminNotes ?? null, bill.tenantNotes ?? null, unit.tenantAccessToken ? `/bill/${unit.tenantAccessToken}` : null]
       );
       if (unit.tenantAccessEnabled && unit.tenantAccessToken && unit.tenantMobile) {
         const billRow = await client.query<{ id: string }>("select id from bills where billing_period_id = ? and unit_id = ? limit 1", [period.id, unit.id]);
-        await sendAndLogSms(
-          {
-            billId: billRow.rows[0]?.id ?? billId,
-            unitId: unit.id,
-            mobile: unit.tenantMobile,
-            message: await renderSmsTemplate("bill_generated", {
-              estateName: "Yardle",
-              tenantName: unit.tenantName || "Tenant",
-              unitNumber: unit.unitReference,
-              billType: period.name,
-              amount: formatAccountBalance(bill.remainingBalancePence),
-              dueDate: period.endDate,
-              paymentLink: `${(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")}/bill/${unit.tenantAccessToken}`
-            }, client)
-          },
-          client
-        );
+        smsRequests.push({
+          billId: billRow.rows[0]?.id ?? billId,
+          unitId: unit.id,
+          mobile: unit.tenantMobile,
+          message: await renderSmsTemplate("bill_generated", {
+            estateName: "Yardle",
+            tenantName: unit.tenantName || "Tenant",
+            unitNumber: unit.unitReference,
+            billType: period.name,
+            amount: formatAccountBalance(bill.remainingBalancePence),
+            dueDate: period.endDate,
+            paymentLink: `${(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")}/bill/${unit.tenantAccessToken}`
+          }, client)
+        });
       }
     }
     await client.query("update billing_periods set status = 'locked', issued_at = utc_timestamp() where id = ?", [periodId]);
@@ -165,6 +164,14 @@ export async function createBillsForPeriod(periodId: string) {
       await client.query(`insert into billing_periods (id, estate_id, name, start_date, end_date, status, kwh_rate_pence, standing_charge_pence, levy_pence, created_by) values (?,?,?,?,?,'draft',?,?,?,?)`, [randomUUID(), next.estateId, next.name, next.startDate, next.endDate, next.kwhRatePence, next.standingChargePence, next.levyPence, next.createdBy || null]);
     }
   });
+
+  for (const request of smsRequests) {
+    try {
+      await sendAndLogSms(request);
+    } catch (error) {
+      console.error("Failed to send bill SMS after issue:", error instanceof Error ? error.message : error);
+    }
+  }
 }
 export interface PublicBillData {
   estate: Estate;
