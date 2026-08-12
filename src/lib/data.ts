@@ -7,8 +7,8 @@ import { nextPeriodDetails } from "./period-cycle";
 import { getPaymentInstructions } from "./payment-instructions";
 import { ensureSeeded, hasDatabaseUrl, query, transaction } from "./db";
 import { createDemoBillsForPeriod, getDemoAppData, getDemoBillingPeriodById, getDemoBillById, getDemoUnitByAccessToken, getDemoUnitById } from "./demo-store";
-import { mapBill, mapBillingPeriod, mapEstate, mapMeterReading, mapPayment, mapSmsLog, mapUnit, mapUser } from "./mappers";
-import type { Bill, BillingPeriod, Estate, MeterReading, Payment, SmsLog, Unit, User } from "./types";
+import { mapBill, mapBillingPeriod, mapEstate, mapMeterReading, mapPayment, mapRentCharge, mapRentPayment, mapRentSetting, mapSmsLog, mapUnit, mapUser } from "./mappers";
+import type { Bill, BillingPeriod, Estate, MeterReading, Payment, RentCharge, RentPayment, RentSetting, SmsLog, Unit, User } from "./types";
 
 export interface AppData {
   users: User[];
@@ -19,6 +19,9 @@ export interface AppData {
   bills: Bill[];
   payments: Payment[];
   smsLogs: SmsLog[];
+  rentSettings: RentSetting[];
+  rentCharges: RentCharge[];
+  rentPayments: RentPayment[];
   setupError?: string;
 }
 
@@ -28,7 +31,7 @@ export async function getAppData(): Promise<AppData> {
   }
 
   await ensureSeeded();
-  const [users, estates, units, periods, readings, bills, payments, smsLogs] = await Promise.all([
+  const [users, estates, units, periods, readings, bills, payments, smsLogs, rentSettings, rentCharges, rentPayments] = await Promise.all([
     query("select * from users order by created_at"),
     query("select * from estates order by created_at limit 1"),
     query("select * from units order by unit_reference"),
@@ -36,7 +39,10 @@ export async function getAppData(): Promise<AppData> {
     query("select * from meter_readings order by entered_at desc"),
     query("select * from bills order by created_at desc"),
     query("select * from payments order by payment_date desc, created_at desc"),
-    query("select * from sms_logs order by created_at desc")
+    query("select * from sms_logs order by created_at desc"),
+    query("select * from rent_settings order by updated_at desc"),
+    query("select * from rent_charges order by due_date desc"),
+    query("select * from rent_payments order by payment_date desc, created_at desc")
   ]);
   const setupError = estates.rows[0] ? undefined : "No estate record found. Run npm run db:seed or create the estate setup record before using Yardle.";
   const fallbackEstate: Estate = {
@@ -61,6 +67,9 @@ export async function getAppData(): Promise<AppData> {
     bills: bills.rows.map(mapBill),
     payments: payments.rows.map(mapPayment),
     smsLogs: smsLogs.rows.map(mapSmsLog),
+    rentSettings: rentSettings.rows.map(mapRentSetting),
+    rentCharges: rentCharges.rows.map(mapRentCharge),
+    rentPayments: rentPayments.rows.map(mapRentPayment),
     setupError
   };
 }

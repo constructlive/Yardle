@@ -1,6 +1,6 @@
 import { calculateBill, calculateUsage } from "./billing";
 import { poundsToPence } from "./money";
-import type { Bill, BillingPeriod, Estate, MeterReading, Payment, SmsLog, Unit, User } from "./types";
+import type { Bill, BillingPeriod, Estate, MeterReading, Payment, RentCharge, RentPayment, RentSetting, SmsLog, Unit, User } from "./types";
 
 const now = "2026-06-01T09:00:00.000Z";
 const estateId = "estate-yardle";
@@ -157,3 +157,43 @@ export function getTenantUnit() {
 
 
 
+
+export const rentSettings: RentSetting[] = units
+  .filter((unit) => unit.status === "active")
+  .slice(0, 18)
+  .map((unit, index) => ({
+    id: `rent-setting-${unit.id}`,
+    unitId: unit.id,
+    enabled: true,
+    frequency: index % 6 === 0 ? "calendar_month" : "weekly_monday",
+    amountPence: poundsToPence(index % 6 === 0 ? 650 + index * 15 : 85 + (index % 5) * 15),
+    startDate: index % 6 === 0 ? "2026-06-01" : "2026-06-08",
+    dueDayOfMonth: index % 6 === 0 ? 1 : undefined,
+    notes: index % 6 === 0 ? "Calendar month arrangement" : undefined,
+    createdAt: now,
+    updatedAt: now
+  }));
+
+export const rentCharges: RentCharge[] = rentSettings.flatMap((setting, index) => {
+  const dates = setting.frequency === "calendar_month" ? ["2026-06-01", "2026-07-01"] : ["2026-06-08", "2026-06-15", "2026-06-22", "2026-06-29", "2026-07-06"];
+  return dates.map((dueDate, chargeIndex) => ({
+    id: `rent-charge-${setting.unitId}-${chargeIndex}`,
+    unitId: setting.unitId,
+    dueDate,
+    amountPence: setting.amountPence,
+    status: "due" as const,
+    notes: index % 6 === 0 ? "Monthly rent" : "Weekly Monday rent",
+    createdAt: `${dueDate}T09:00:00.000Z`
+  }));
+});
+
+export const rentPayments: RentPayment[] = rentSettings.slice(0, 12).map((setting, index) => ({
+  id: `rent-payment-${setting.unitId}`,
+  unitId: setting.unitId,
+  amountPence: setting.amountPence * (index % 4 === 0 ? 6 : index % 3 === 0 ? 4 : 2),
+  paymentMethod: index % 2 === 0 ? "bank_transfer" : "cash",
+  paymentDate: index % 2 === 0 ? "2026-07-06" : "2026-06-29",
+  notes: index % 4 === 0 ? "Paid ahead" : "Demo rent payment",
+  recordedBy: "user-admin",
+  createdAt: "2026-07-06T12:00:00.000Z"
+}));

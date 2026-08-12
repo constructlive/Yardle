@@ -5,6 +5,8 @@ export type ReadingStatus = "draft" | "confirmed" | "billed";
 export type PaidStatus = "unpaid" | "part_paid" | "paid" | "credited";
 export type PaymentMethod = "cash" | "bank_transfer" | "card" | "other";
 export type SmsStatus = "queued" | "sent" | "failed" | "simulated";
+export type RentFrequency = "weekly_monday" | "calendar_month" | "manual";
+export type RentChargeStatus = "due" | "paid" | "credited" | "cancelled";
 
 export interface User {
   id: string;
@@ -147,3 +149,40 @@ export interface SmsLog {
 }
 
 
+
+export interface RentSetting {
+  id: string;
+  unitId: string;
+  enabled: boolean;
+  frequency: RentFrequency;
+  amountPence: number;
+  startDate: string;
+  dueDayOfMonth?: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RentCharge {
+  id: string;
+  unitId: string;
+  dueDate: string;
+  amountPence: number;
+  status: RentChargeStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface RentPayment {
+  id: string;
+  unitId: string;
+  amountPence: number;
+  paymentMethod: PaymentMethod;
+  paymentDate: string;
+  notes?: string;
+  recordedBy: string;
+  reversedAt?: string;
+  reversedBy?: string;
+  reversalReason?: string;
+  createdAt: string;
+}

@@ -1,4 +1,4 @@
-import type { Bill, BillingPeriod, Estate, MeterReading, Payment, SmsLog, Unit, User } from "./types";
+import type { Bill, BillingPeriod, Estate, MeterReading, Payment, RentCharge, RentPayment, RentSetting, SmsLog, Unit, User } from "./types";
 
 function safeDateTime(value: unknown): string | undefined {
   if (value === null || value === undefined || value === "") return undefined;
@@ -158,6 +158,48 @@ export function mapSmsLog(row: any): SmsLog {
     providerReference: row.provider_reference ?? "",
     failureReason: row.failure_reason ?? undefined,
     sentAt: safeDateTime(row.sent_at),
+    createdAt: requiredDateTime(row.created_at)
+  };
+}
+export function mapRentSetting(row: any): RentSetting {
+  return {
+    id: row.id,
+    unitId: row.unit_id,
+    enabled: Boolean(row.enabled),
+    frequency: row.frequency,
+    amountPence: Number(row.amount_pence ?? 0),
+    startDate: requiredDate(row.start_date),
+    dueDayOfMonth: row.due_day_of_month === null || row.due_day_of_month === undefined ? undefined : Number(row.due_day_of_month),
+    notes: row.notes ?? undefined,
+    createdAt: requiredDateTime(row.created_at),
+    updatedAt: requiredDateTime(row.updated_at)
+  };
+}
+
+export function mapRentCharge(row: any): RentCharge {
+  return {
+    id: row.id,
+    unitId: row.unit_id,
+    dueDate: requiredDate(row.due_date),
+    amountPence: Number(row.amount_pence ?? 0),
+    status: row.status,
+    notes: row.notes ?? undefined,
+    createdAt: requiredDateTime(row.created_at)
+  };
+}
+
+export function mapRentPayment(row: any): RentPayment {
+  return {
+    id: row.id,
+    unitId: row.unit_id,
+    amountPence: Number(row.amount_pence ?? 0),
+    paymentMethod: row.payment_method,
+    paymentDate: requiredDate(row.payment_date),
+    notes: row.notes ?? undefined,
+    recordedBy: row.recorded_by ?? "",
+    reversedAt: safeDateTime(row.reversed_at),
+    reversedBy: row.reversed_by ?? undefined,
+    reversalReason: row.reversal_reason ?? undefined,
     createdAt: requiredDateTime(row.created_at)
   };
 }

@@ -2,9 +2,9 @@ import { calculateBill, calculateUsage } from "./billing";
 import { getTenantBillUrl } from "./secure-link";
 import { buildBillSms } from "./sms";
 import { nextPeriodDetails } from "./period-cycle";
-import { bills, billingPeriods, estate, meterReadings, payments, smsLogs, units, users } from "./demo-data";
+import { bills, billingPeriods, estate, meterReadings, payments, rentCharges, rentPayments, rentSettings, smsLogs, units, users } from "./demo-data";
 import type { AppData } from "./data";
-import type { BillingPeriod, PaymentMethod } from "./types";
+import type { BillingPeriod, PaymentMethod, RentFrequency } from "./types";
 
 const demoData: AppData = {
   users: users.map((item) => ({ ...item })),
@@ -14,7 +14,10 @@ const demoData: AppData = {
   meterReadings: meterReadings.map((item) => ({ ...item })),
   bills: bills.map((item) => ({ ...item })),
   payments: payments.map((item) => ({ ...item })),
-  smsLogs: smsLogs.map((item) => ({ ...item }))
+  smsLogs: smsLogs.map((item) => ({ ...item })),
+  rentSettings: rentSettings.map((item) => ({ ...item })),
+  rentCharges: rentCharges.map((item) => ({ ...item })),
+  rentPayments: rentPayments.map((item) => ({ ...item }))
 };
 
 export function getDemoAppData(): AppData {
@@ -235,3 +238,50 @@ export function addDemoSmsLog(input: { billId?: string; unitId?: string; mobile:
 
 
 
+
+export function saveDemoRentSetting(input: { unitId: string; enabled: boolean; frequency: RentFrequency; amountPence: number; startDate: string; dueDayOfMonth?: number; notes?: string }) {
+  const existingIndex = demoData.rentSettings.findIndex((setting) => setting.unitId === input.unitId);
+  const now = new Date().toISOString();
+  const setting = {
+    id: existingIndex >= 0 ? demoData.rentSettings[existingIndex].id : `demo-rent-setting-${input.unitId}`,
+    unitId: input.unitId,
+    enabled: input.enabled,
+    frequency: input.frequency,
+    amountPence: input.amountPence,
+    startDate: input.startDate,
+    dueDayOfMonth: input.dueDayOfMonth,
+    notes: input.notes,
+    createdAt: existingIndex >= 0 ? demoData.rentSettings[existingIndex].createdAt : now,
+    updatedAt: now
+  };
+  if (existingIndex >= 0) demoData.rentSettings[existingIndex] = setting;
+  else demoData.rentSettings.unshift(setting);
+  return setting;
+}
+
+export function saveDemoRentPayment(input: { unitId: string; amountPence: number; paymentMethod: PaymentMethod; paymentDate: string; notes?: string }) {
+  demoData.rentPayments.unshift({
+    id: `demo-rent-payment-${Date.now()}`,
+    unitId: input.unitId,
+    amountPence: input.amountPence,
+    paymentMethod: input.paymentMethod,
+    paymentDate: input.paymentDate,
+    notes: input.notes,
+    recordedBy: "user-admin",
+    createdAt: new Date().toISOString()
+  });
+}
+
+export function addDemoRentCharges(input: { unitId: string; dueDates: string[]; amountPence: number }) {
+  for (const dueDate of input.dueDates) {
+    if (demoData.rentCharges.some((charge) => charge.unitId === input.unitId && charge.dueDate === dueDate)) continue;
+    demoData.rentCharges.unshift({
+      id: `demo-rent-charge-${input.unitId}-${dueDate}`,
+      unitId: input.unitId,
+      dueDate,
+      amountPence: input.amountPence,
+      status: "due",
+      createdAt: new Date().toISOString()
+    });
+  }
+}

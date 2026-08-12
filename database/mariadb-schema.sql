@@ -217,6 +217,51 @@ create table if not exists sms_templates (
   created_at datetime not null default current_timestamp,
   updated_at datetime not null default current_timestamp on update current_timestamp
 ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+create table if not exists rent_settings (
+  id char(36) primary key,
+  unit_id char(36) not null unique,
+  enabled tinyint(1) not null default 0,
+  frequency varchar(32) not null default 'weekly_monday',
+  amount_pence int not null default 0,
+  start_date date,
+  due_day_of_month int,
+  notes text,
+  created_at datetime not null default current_timestamp,
+  updated_at datetime not null default current_timestamp on update current_timestamp,
+  constraint fk_rent_settings_unit foreign key (unit_id) references units(id) on delete cascade,
+  constraint chk_rent_settings_frequency check (frequency in ('weekly_monday', 'calendar_month', 'manual'))
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+
+create table if not exists rent_charges (
+  id char(36) primary key,
+  unit_id char(36) not null,
+  due_date date not null,
+  amount_pence int not null,
+  status varchar(32) not null default 'due',
+  notes text,
+  created_at datetime not null default current_timestamp,
+  unique key uq_rent_charges_unit_due (unit_id, due_date),
+  constraint fk_rent_charges_unit foreign key (unit_id) references units(id) on delete cascade,
+  constraint chk_rent_charges_status check (status in ('due', 'paid', 'credited', 'cancelled'))
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+
+create table if not exists rent_payments (
+  id char(36) primary key,
+  unit_id char(36) not null,
+  amount_pence int not null,
+  payment_method varchar(32) not null,
+  payment_date date not null,
+  notes text,
+  recorded_by char(36),
+  reversed_at datetime,
+  reversed_by char(36),
+  reversal_reason text,
+  created_at datetime not null default current_timestamp,
+  constraint fk_rent_payments_unit foreign key (unit_id) references units(id) on delete cascade,
+  constraint fk_rent_payments_recorded_by foreign key (recorded_by) references users(id) on delete set null,
+  constraint chk_rent_payments_amount check (amount_pence > 0),
+  constraint chk_rent_payments_method check (payment_method in ('cash', 'bank_transfer', 'card', 'other'))
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
 create table if not exists settings (
   id char(36) primary key,
   setting_key varchar(128) not null unique,
@@ -237,11 +282,59 @@ create index idx_bills_unit_issued on bills (unit_id, issued_at);
 create index idx_payments_unit_date on payments (unit_id, payment_date);
 create index idx_payments_bill on payments (bill_id);
 create index idx_sms_logs_created_at on sms_logs (created_at);
+create index idx_rent_charges_unit_due on rent_charges (unit_id, due_date);
+create index idx_rent_payments_unit_date on rent_payments (unit_id, payment_date);
 create index if not exists idx_sms_templates_key on sms_templates (template_key);
 create index idx_historical_bills_unit_period on historical_bills (unit_id, billing_period_start, billing_period_end);
 create index idx_historical_import_batches_uploaded on historical_import_batches (uploaded_at);
 
 -- Additive migrations for existing production databases. These preserve current rows and values.
+-- Additive rent management tables. These preserve current utility rows and values.
+create table if not exists rent_settings (
+  id char(36) primary key,
+  unit_id char(36) not null unique,
+  enabled tinyint(1) not null default 0,
+  frequency varchar(32) not null default 'weekly_monday',
+  amount_pence int not null default 0,
+  start_date date,
+  due_day_of_month int,
+  notes text,
+  created_at datetime not null default current_timestamp,
+  updated_at datetime not null default current_timestamp on update current_timestamp,
+  constraint fk_rent_settings_unit foreign key (unit_id) references units(id) on delete cascade,
+  constraint chk_rent_settings_frequency check (frequency in ('weekly_monday', 'calendar_month', 'manual'))
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+create table if not exists rent_charges (
+  id char(36) primary key,
+  unit_id char(36) not null,
+  due_date date not null,
+  amount_pence int not null,
+  status varchar(32) not null default 'due',
+  notes text,
+  created_at datetime not null default current_timestamp,
+  unique key uq_rent_charges_unit_due (unit_id, due_date),
+  constraint fk_rent_charges_unit foreign key (unit_id) references units(id) on delete cascade,
+  constraint chk_rent_charges_status check (status in ('due', 'paid', 'credited', 'cancelled'))
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+create table if not exists rent_payments (
+  id char(36) primary key,
+  unit_id char(36) not null,
+  amount_pence int not null,
+  payment_method varchar(32) not null,
+  payment_date date not null,
+  notes text,
+  recorded_by char(36),
+  reversed_at datetime,
+  reversed_by char(36),
+  reversal_reason text,
+  created_at datetime not null default current_timestamp,
+  constraint fk_rent_payments_unit foreign key (unit_id) references units(id) on delete cascade,
+  constraint fk_rent_payments_recorded_by foreign key (recorded_by) references users(id) on delete set null,
+  constraint chk_rent_payments_amount check (amount_pence > 0),
+  constraint chk_rent_payments_method check (payment_method in ('cash', 'bank_transfer', 'card', 'other'))
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+create index if not exists idx_rent_charges_unit_due on rent_charges (unit_id, due_date);
+create index if not exists idx_rent_payments_unit_date on rent_payments (unit_id, payment_date);
 alter table payments add column if not exists reversed_at datetime after recorded_by, add column if not exists reversed_by char(36) after reversed_at, add column if not exists reversal_reason text after reversed_by;
 alter table sms_logs add column if not exists failure_reason text after provider_reference;
 create index if not exists idx_payments_bill_active on payments (bill_id, reversed_at);

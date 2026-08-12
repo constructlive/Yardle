@@ -11,11 +11,12 @@ import { serializeTenantMeta } from "./tenant-meta";
 import { createTenantAccessToken, getTenantBillUrl } from "./secure-link";
 import { renderSmsTemplate, saveSmsTemplate } from "./sms-templates";
 import { savePaymentInstructions } from "./payment-instructions";
+import { getRentDueDates, normaliseRentFrequency } from "./rent";
 import { sendAndLogSms } from "./sms-logging";
 import { commitHistoricalImport, previewHistoricalImport, type HistoricalImportCommitState, type HistoricalImportPreviewState, type HistoricalImportPreviewRow } from "./historical-import";
 import { requireAdminSession } from "./session";
-import { archiveDemoUnit, regenerateDemoTenantAccessToken, saveDemoBillingPeriod, saveDemoEstate, saveDemoMeterReading, saveDemoPaymentUpdate, saveDemoUnit } from "./demo-store";
-
+import { addDemoRentCharges, archiveDemoUnit, regenerateDemoTenantAccessToken, saveDemoBillingPeriod, saveDemoEstate, saveDemoMeterReading, saveDemoPaymentUpdate, saveDemoRentPayment, saveDemoRentSetting, saveDemoUnit } from "./demo-store";
+import type { PaymentMethod } from "./types";
 function text(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
 }
@@ -444,4 +445,109 @@ export async function sendTenantBillLinkSms(input: FormData | string) {
     ok: log.status !== "failed",
     message: log.status === "failed" ? `SMS failed: ${log.failureReason || "provider rejected the message."}` : `SMS ${log.status === "simulated" ? "simulated" : "sent"} to ${log.mobile}.`
   };
+}
+
+export async function saveRentSetting(formData: FormData) {
+  await requireAdminSession();
+  const unitId = text(formData.get("unitId"));
+  const enabled = bool(formData.get("enabled"));
+  const frequency = normaliseRentFrequency(text(formData.get("frequency")));
+  const amountPence = pence(formData.get("amount")) ?? 0;
+  const startDate = text(formData.get("startDate")) || new Date().toISOString().slice(0, 10);
+  const dueDayValue = Number(text(formData.get("dueDayOfMonth")) || "1");
+  const dueDayOfMonth = frequency === "calendar_month" ? Math.min(28, Math.max(1, dueDayValue)) : undefined;
+  const notes = text(formData.get("notes")) || undefined;
+
+  if (!unitId) return;
+  if (enabled && amountPence <= 0) return;
+
+  if (!hasDatabaseUrl()) {
+    saveDemoRentSetting({ unitId, enabled, frequency, amountPence, startDate, dueDayOfMonth, notes });
+    revalidatePath("/admin/rent");
+    revalidatePath("/admin/rent/settings");
+    revalidatePath("/admin/rent/checklist");
+    return;
+  }
+
+  await ensureSeeded();
+  await query(
+    `insert into rent_settings (id, unit_id, enabled, frequency, amount_pence, start_date, due_day_of_month, notes)
+     values (?,?,?,?,?,?,?,?)
+     on duplicate key update enabled=values(enabled), frequency=values(frequency), amount_pence=values(amount_pence), start_date=values(start_date), due_day_of_month=values(due_day_of_month), notes=values(notes), updated_at=utc_timestamp()`,
+    [randomUUID(), unitId, enabled, frequency, amountPence, startDate, dueDayOfMonth ?? null, notes ?? null]
+  );
+  revalidatePath("/admin/rent");
+  revalidatePath("/admin/rent/settings");
+  revalidatePath("/admin/rent/checklist");
+  return;
+}
+
+export async function generateRentCharges(formData?: FormData) {
+  await requireAdminSession();
+  const requestedUnitId = formData ? text(formData.get("unitId")) : "";
+  const data = await getAppData();
+  const settings = data.rentSettings.filter((setting) => setting.enabled && setting.amountPence > 0 && (!requestedUnitId || setting.unitId === requestedUnitId));
+  let created = 0;
+
+  if (!hasDatabaseUrl()) {
+    for (const setting of settings) {
+      const existing = new Set(data.rentCharges.filter((charge) => charge.unitId === setting.unitId).map((charge) => charge.dueDate));
+      const dueDates = getRentDueDates(setting).filter((dueDate) => !existing.has(dueDate));
+      addDemoRentCharges({ unitId: setting.unitId, dueDates, amountPence: setting.amountPence });
+      created += dueDates.length;
+    }
+    revalidatePath("/admin/rent");
+    revalidatePath("/admin/rent/checklist");
+    return;
+  }
+
+  await ensureSeeded();
+  for (const setting of settings) {
+    const existing = new Set(data.rentCharges.filter((charge) => charge.unitId === setting.unitId).map((charge) => charge.dueDate));
+    const dueDates = getRentDueDates(setting).filter((dueDate) => !existing.has(dueDate));
+    for (const dueDate of dueDates) {
+      await query(
+        `insert into rent_charges (id, unit_id, due_date, amount_pence, status, notes)
+         values (?,?,?,?, 'due', ?)
+         on duplicate key update amount_pence=values(amount_pence)`,
+        [randomUUID(), setting.unitId, dueDate, setting.amountPence, setting.frequency === "calendar_month" ? "Calendar monthly rent" : "Weekly Monday rent"]
+      );
+      created += 1;
+    }
+  }
+  revalidatePath("/admin/rent");
+  revalidatePath("/admin/rent/checklist");
+  return;
+}
+
+export async function saveRentPayment(formData: FormData) {
+  const session = await requireAdminSession();
+  const unitId = text(formData.get("unitId"));
+  const amountPence = pence(formData.get("amount")) ?? 0;
+  const methodRaw = text(formData.get("paymentMethod")).toLowerCase().replaceAll(" ", "_");
+  const paymentMethod: PaymentMethod = methodRaw === "cash" || methodRaw === "bank_transfer" || methodRaw === "card" ? methodRaw : "other";
+  const paymentDate = text(formData.get("paymentDate")) || new Date().toISOString().slice(0, 10);
+  const notes = text(formData.get("notes")) || undefined;
+
+  if (!unitId) return;
+  if (amountPence <= 0) return;
+
+  if (!hasDatabaseUrl()) {
+    saveDemoRentPayment({ unitId, amountPence, paymentMethod, paymentDate, notes });
+    revalidatePath("/admin/rent");
+    revalidatePath("/admin/rent/checklist");
+    revalidatePath("/admin/rent/payments");
+    return;
+  }
+
+  await ensureSeeded();
+  await query(
+    `insert into rent_payments (id, unit_id, amount_pence, payment_method, payment_date, notes, recorded_by)
+     values (?,?,?,?,?,?,?)`,
+    [randomUUID(), unitId, amountPence, paymentMethod, paymentDate, notes ?? null, session.userId]
+  );
+  revalidatePath("/admin/rent");
+  revalidatePath("/admin/rent/checklist");
+  revalidatePath("/admin/rent/payments");
+  return;
 }
