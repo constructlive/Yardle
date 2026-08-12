@@ -499,7 +499,7 @@ export async function generateRentCharges(formData?: FormData) {
     }
     revalidatePath("/admin/rent");
     revalidatePath("/admin/rent/checklist");
-    return;
+    redirect(`/admin/rent?rentGenerated=${created}&rentUnits=${settings.length}`);
   }
 
   await ensureSeeded();
@@ -518,7 +518,7 @@ export async function generateRentCharges(formData?: FormData) {
   }
   revalidatePath("/admin/rent");
   revalidatePath("/admin/rent/checklist");
-  return;
+  redirect(`/admin/rent?rentGenerated=${created}&rentUnits=${settings.length}`);
 }
 
 export async function saveRentPayment(formData: FormData) {

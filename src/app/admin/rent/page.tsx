@@ -7,7 +7,7 @@ import { CalendarClock, HandCoins, Landmark, TrendingUp, Users } from "lucide-re
 
 export const dynamic = "force-dynamic";
 
-export default async function RentDashboardPage() {
+export default async function RentDashboardPage({ searchParams }: { searchParams?: { rentGenerated?: string; rentUnits?: string } }) {
   const { units, rentSettings, rentCharges, rentPayments } = await getAppData();
   const ledger = buildRentLedger(units, rentSettings, rentCharges, rentPayments);
   const configured = ledger.filter((row) => row.enabled);
@@ -15,10 +15,19 @@ export default async function RentDashboardPage() {
   const outstanding = ledger.reduce((sum, row) => sum + Math.max(0, row.balancePence), 0);
   const credit = ledger.reduce((sum, row) => sum + Math.max(0, -row.balancePence), 0);
   const paid = rentPayments.filter((payment) => !payment.reversedAt).reduce((sum, payment) => sum + payment.amountPence, 0);
-  const arrears = ledger.filter((row) => row.status === "arrears" || row.status === "due");
+  const generatedCount = Number(searchParams?.rentGenerated ?? "");
+  const generatedUnits = Number(searchParams?.rentUnits ?? "");
+  const generationMessage = Number.isFinite(generatedCount)
+    ? generatedCount > 0
+      ? `${generatedCount} rent due ${generatedCount === 1 ? "entry has" : "entries have"} been generated.`
+      : generatedUnits > 0
+        ? "No new rent was generated. The due entries already exist, or the next due date has not arrived yet."
+        : "No rent was generated because no units have rent tracking enabled with an amount."
+    : undefined;
 
   return <>
     <PageHeader title="Rent Dashboard" eyebrow="Rent Management" action={<form action={generateRentCharges}><PrimaryButton><CalendarClock className="h-5 w-5" />Generate rent due</PrimaryButton></form>} />
+    {generationMessage ? <section className={`mb-5 rounded-2xl border p-4 text-sm font-black shadow-soft ${generatedCount > 0 ? "border-estate-500/30 bg-estate-500/10 text-estate-100" : "border-amber-500/30 bg-amber-500/10 text-amber-100"}`}>{generationMessage}</section> : null}
     <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
       <StatCard label="Tracked units" value={`${configured.length} / ${ledger.length}`} hint="Units with rent enabled" icon={Users} tone="green" href="/admin/rent/settings" />
       <StatCard label="Outstanding rent" value={formatMoney(outstanding)} hint="Opening arrears plus generated rent" icon={TrendingUp} tone="danger" href="/admin/rent/arrears" />
