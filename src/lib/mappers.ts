@@ -168,6 +168,7 @@ export function mapRentSetting(row: any): RentSetting {
     enabled: Boolean(row.enabled),
     frequency: row.frequency,
     amountPence: Number(row.amount_pence ?? 0),
+    openingBalancePence: Number(row.opening_balance_pence ?? 0),
     startDate: requiredDate(row.start_date),
     dueDayOfMonth: row.due_day_of_month === null || row.due_day_of_month === undefined ? undefined : Number(row.due_day_of_month),
     notes: row.notes ?? undefined,

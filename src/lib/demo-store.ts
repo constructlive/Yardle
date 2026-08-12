@@ -239,7 +239,7 @@ export function addDemoSmsLog(input: { billId?: string; unitId?: string; mobile:
 
 
 
-export function saveDemoRentSetting(input: { unitId: string; enabled: boolean; frequency: RentFrequency; amountPence: number; startDate: string; dueDayOfMonth?: number; notes?: string }) {
+export function saveDemoRentSetting(input: { unitId: string; enabled: boolean; frequency: RentFrequency; amountPence: number; openingBalancePence: number; startDate: string; dueDayOfMonth?: number; notes?: string }) {
   const existingIndex = demoData.rentSettings.findIndex((setting) => setting.unitId === input.unitId);
   const now = new Date().toISOString();
   const setting = {
@@ -248,6 +248,7 @@ export function saveDemoRentSetting(input: { unitId: string; enabled: boolean; f
     enabled: input.enabled,
     frequency: input.frequency,
     amountPence: input.amountPence,
+    openingBalancePence: input.openingBalancePence,
     startDate: input.startDate,
     dueDayOfMonth: input.dueDayOfMonth,
     notes: input.notes,

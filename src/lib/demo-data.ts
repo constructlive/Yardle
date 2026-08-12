@@ -167,6 +167,7 @@ export const rentSettings: RentSetting[] = units
     enabled: true,
     frequency: index % 6 === 0 ? "calendar_month" : "weekly_monday",
     amountPence: poundsToPence(index % 6 === 0 ? 650 + index * 15 : 85 + (index % 5) * 15),
+    openingBalancePence: index % 5 === 0 ? poundsToPence(18 + index) : index % 9 === 0 ? -poundsToPence(25) : 0,
     startDate: index % 6 === 0 ? "2026-06-01" : "2026-06-08",
     dueDayOfMonth: index % 6 === 0 ? 1 : undefined,
     notes: index % 6 === 0 ? "Calendar month arrangement" : undefined,

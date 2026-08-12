@@ -223,6 +223,7 @@ create table if not exists rent_settings (
   enabled tinyint(1) not null default 0,
   frequency varchar(32) not null default 'weekly_monday',
   amount_pence int not null default 0,
+  opening_balance_pence int not null default 0,
   start_date date,
   due_day_of_month int,
   notes text,
@@ -296,6 +297,7 @@ create table if not exists rent_settings (
   enabled tinyint(1) not null default 0,
   frequency varchar(32) not null default 'weekly_monday',
   amount_pence int not null default 0,
+  opening_balance_pence int not null default 0,
   start_date date,
   due_day_of_month int,
   notes text,
@@ -333,6 +335,7 @@ create table if not exists rent_payments (
   constraint chk_rent_payments_amount check (amount_pence > 0),
   constraint chk_rent_payments_method check (payment_method in ('cash', 'bank_transfer', 'card', 'other'))
 ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+alter table rent_settings add column if not exists opening_balance_pence int not null default 0 after amount_pence;
 create index if not exists idx_rent_charges_unit_due on rent_charges (unit_id, due_date);
 create index if not exists idx_rent_payments_unit_date on rent_payments (unit_id, payment_date);
 alter table payments add column if not exists reversed_at datetime after recorded_by, add column if not exists reversed_by char(36) after reversed_at, add column if not exists reversal_reason text after reversed_by;

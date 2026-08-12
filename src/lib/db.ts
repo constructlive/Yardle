@@ -190,6 +190,7 @@ export async function ensureSeeded() {
     enabled tinyint(1) not null default 0,
     frequency varchar(32) not null default 'weekly_monday',
     amount_pence int not null default 0,
+    opening_balance_pence int not null default 0,
     start_date date,
     due_day_of_month int,
     notes text,
@@ -198,6 +199,7 @@ export async function ensureSeeded() {
     constraint fk_rent_settings_unit foreign key (unit_id) references units(id) on delete cascade,
     constraint chk_rent_settings_frequency check (frequency in ('weekly_monday', 'calendar_month', 'manual'))
   ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci`);
+  await database.execute(`alter table rent_settings add column if not exists opening_balance_pence int not null default 0 after amount_pence`);
   await database.execute(`create table if not exists rent_charges (
     id char(36) primary key,
     unit_id char(36) not null,

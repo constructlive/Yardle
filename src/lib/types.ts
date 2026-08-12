@@ -156,6 +156,7 @@ export interface RentSetting {
   enabled: boolean;
   frequency: RentFrequency;
   amountPence: number;
+  openingBalancePence: number;
   startDate: string;
   dueDayOfMonth?: number;
   notes?: string;

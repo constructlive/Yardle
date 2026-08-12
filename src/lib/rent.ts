@@ -6,6 +6,7 @@ export type RentLedgerRow = {
   enabled: boolean;
   frequency: RentFrequency;
   weeklyOrMonthlyRentPence: number;
+  openingBalancePence: number;
   chargedPence: number;
   paidPence: number;
   balancePence: number;
@@ -107,9 +108,10 @@ export function buildRentLedger(units: Unit[], settings: RentSetting[], charges:
       const setting = settings.find((item) => item.unitId === unit.id);
       const unitCharges = charges.filter((item) => item.unitId === unit.id && item.status !== "cancelled");
       const unitPayments = payments.filter((item) => item.unitId === unit.id && !item.reversedAt);
+      const openingBalancePence = setting?.openingBalancePence ?? 0;
       const chargedPence = unitCharges.reduce((sum, charge) => sum + charge.amountPence, 0);
       const paidPence = unitPayments.reduce((sum, payment) => sum + payment.amountPence, 0);
-      const balancePence = chargedPence - paidPence;
+      const balancePence = openingBalancePence + chargedPence - paidPence;
       const lastPaymentDate = unitPayments.sort((a, b) => b.paymentDate.localeCompare(a.paymentDate))[0]?.paymentDate;
       const enabled = Boolean(setting?.enabled);
       const status: RentLedgerRow["status"] = !enabled ? "not_configured" : balancePence < 0 ? "credit" : balancePence === 0 ? "up_to_date" : balancePence > (setting?.amountPence ?? 0) ? "arrears" : "due";
@@ -119,6 +121,7 @@ export function buildRentLedger(units: Unit[], settings: RentSetting[], charges:
         enabled,
         frequency: setting?.frequency ?? "weekly_monday",
         weeklyOrMonthlyRentPence: setting?.amountPence ?? 0,
+        openingBalancePence,
         chargedPence,
         paidPence,
         balancePence,

@@ -453,6 +453,7 @@ export async function saveRentSetting(formData: FormData) {
   const enabled = bool(formData.get("enabled"));
   const frequency = normaliseRentFrequency(text(formData.get("frequency")));
   const amountPence = pence(formData.get("amount")) ?? 0;
+  const openingBalancePence = pence(formData.get("openingBalance")) ?? 0;
   const startDate = text(formData.get("startDate")) || new Date().toISOString().slice(0, 10);
   const dueDayValue = Number(text(formData.get("dueDayOfMonth")) || "1");
   const dueDayOfMonth = frequency === "calendar_month" ? Math.min(28, Math.max(1, dueDayValue)) : undefined;
@@ -462,7 +463,7 @@ export async function saveRentSetting(formData: FormData) {
   if (enabled && amountPence <= 0) return;
 
   if (!hasDatabaseUrl()) {
-    saveDemoRentSetting({ unitId, enabled, frequency, amountPence, startDate, dueDayOfMonth, notes });
+    saveDemoRentSetting({ unitId, enabled, frequency, amountPence, openingBalancePence, startDate, dueDayOfMonth, notes });
     revalidatePath("/admin/rent");
     revalidatePath("/admin/rent/settings");
     revalidatePath("/admin/rent/checklist");
@@ -471,10 +472,10 @@ export async function saveRentSetting(formData: FormData) {
 
   await ensureSeeded();
   await query(
-    `insert into rent_settings (id, unit_id, enabled, frequency, amount_pence, start_date, due_day_of_month, notes)
-     values (?,?,?,?,?,?,?,?)
-     on duplicate key update enabled=values(enabled), frequency=values(frequency), amount_pence=values(amount_pence), start_date=values(start_date), due_day_of_month=values(due_day_of_month), notes=values(notes), updated_at=utc_timestamp()`,
-    [randomUUID(), unitId, enabled, frequency, amountPence, startDate, dueDayOfMonth ?? null, notes ?? null]
+    `insert into rent_settings (id, unit_id, enabled, frequency, amount_pence, opening_balance_pence, start_date, due_day_of_month, notes)
+     values (?,?,?,?,?,?,?,?,?)
+     on duplicate key update enabled=values(enabled), frequency=values(frequency), amount_pence=values(amount_pence), opening_balance_pence=values(opening_balance_pence), start_date=values(start_date), due_day_of_month=values(due_day_of_month), notes=values(notes), updated_at=utc_timestamp()`,
+    [randomUUID(), unitId, enabled, frequency, amountPence, openingBalancePence, startDate, dueDayOfMonth ?? null, notes ?? null]
   );
   revalidatePath("/admin/rent");
   revalidatePath("/admin/rent/settings");
