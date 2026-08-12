@@ -11,7 +11,7 @@ import { serializeTenantMeta } from "./tenant-meta";
 import { createTenantAccessToken, getTenantBillUrl } from "./secure-link";
 import { renderSmsTemplate, saveSmsTemplate } from "./sms-templates";
 import { savePaymentInstructions } from "./payment-instructions";
-import { getRentDueDates, normaliseRentFrequency } from "./rent";
+import { buildRentLedger, getRentDueDates, normaliseRentFrequency } from "./rent";
 import { sendAndLogSms } from "./sms-logging";
 import { commitHistoricalImport, previewHistoricalImport, type HistoricalImportCommitState, type HistoricalImportPreviewState, type HistoricalImportPreviewRow } from "./historical-import";
 import { requireAdminSession } from "./session";
@@ -33,6 +33,12 @@ function pence(value: FormDataEntryValue | null) {
 function numberValue(value: FormDataEntryValue | null) {
   const raw = text(value);
   return raw ? Number(raw) : 0;
+}
+
+function formatSmsDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value || "";
+  const [year, month, day] = value.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 export async function previewHistoricalImportAction(_previousState: HistoricalImportPreviewState, formData: FormData): Promise<HistoricalImportPreviewState> {
@@ -396,6 +402,45 @@ export async function saveReminderForBill(billId: string) {
   revalidatePath("/admin/sms");
   revalidatePath("/admin/landlord");
 }
+
+export async function sendRentReminderSms(input: { unitId: string; periodFrom: string; periodTo: string }) {
+  await requireAdminSession();
+  const data = await getAppData();
+  const unit = data.units.find((item) => item.id === input.unitId);
+  if (!unit) return { ok: false, message: "Unit not found." };
+  if (!unit.tenantMobile) return { ok: false, message: `No mobile number is recorded for Unit ${unit.unitReference}.` };
+
+  const ledgerRow = buildRentLedger(data.units, data.rentSettings, data.rentCharges, data.rentPayments).find((row) => row.unit.id === unit.id);
+  const totalPence = Math.max(0, ledgerRow?.balancePence ?? 0);
+  if (totalPence <= 0) return { ok: false, message: `Unit ${unit.unitReference} has no outstanding rent to remind.` };
+
+  const amount = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(totalPence / 100);
+  const periodFrom = formatSmsDate(input.periodFrom);
+  const periodTo = formatSmsDate(input.periodTo);
+  const log = await sendAndLogSms({
+    unitId: unit.id,
+    mobile: unit.tenantMobile,
+    message: await renderSmsTemplate("rent_reminder", {
+      estateName: data.estate.name,
+      tenantName: unit.tenantName || "Tenant",
+      unitNumber: unit.unitReference,
+      billType: "rent",
+      amount,
+      dueDate: periodTo,
+      periodFrom,
+      periodTo,
+      paymentLink: ""
+    })
+  });
+  revalidatePath("/admin/sms");
+  revalidatePath("/admin/rent");
+  revalidatePath("/admin/rent/checklist");
+  return {
+    ok: log.status !== "failed",
+    message: log.status === "failed" ? `Rent SMS failed: ${log.failureReason || "provider rejected the message."}` : `Rent reminder ${log.status === "simulated" ? "simulated" : "sent"} to Unit ${unit.unitReference}.`
+  };
+}
+
 export async function regenerateTenantBillLink(formData: FormData) {
   await requireAdminSession();
   const unitId = text(formData.get("unitId"));

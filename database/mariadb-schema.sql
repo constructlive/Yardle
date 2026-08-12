@@ -354,6 +354,7 @@ insert into sms_templates (id, template_key, display_name, body) values
 ('00000000-0000-4000-9000-000000000002','bill_generated','Bill Generated','Your Yardle electricity bill for {{billType}} is ready. Total due: {{amount}}. View it here: {{paymentLink}}'),
 ('00000000-0000-4000-9000-000000000003','payment_reminder','Payment Reminder','Reminder: Unit {{unitNumber}} has {{amount}} outstanding for {{billType}}. View your bill here: {{paymentLink}}'),
 ('00000000-0000-4000-9000-000000000004','overdue_reminder','Overdue Reminder','Overdue reminder: Unit {{unitNumber}} has {{amount}} outstanding. Please arrange payment as soon as possible. {{paymentLink}}'),
-('00000000-0000-4000-9000-000000000005','payment_received','Payment Received','Thank you. We have received {{amount}} for Unit {{unitNumber}} at {{estateName}}.'),
-('00000000-0000-4000-9000-000000000006','meter_reading_reminder','Meter Reading Reminder','Reminder: please provide your meter reading for Unit {{unitNumber}} at {{estateName}}. {{paymentLink}}')
+('00000000-0000-4000-9000-000000000005','rent_reminder','Rent Reminder','Rent reminder for Unit {{unitNumber}} covering {{periodFrom}} to {{periodTo}}. Total outstanding: {{amount}}. Please arrange payment.'),
+('00000000-0000-4000-9000-000000000006','payment_received','Payment Received','Thank you. We have received {{amount}} for Unit {{unitNumber}} at {{estateName}}.'),
+('00000000-0000-4000-9000-000000000007','meter_reading_reminder','Meter Reading Reminder','Reminder: please provide your meter reading for Unit {{unitNumber}} at {{estateName}}. {{paymentLink}}')
 on duplicate key update display_name=values(display_name);

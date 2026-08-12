@@ -5,6 +5,8 @@
   "billType",
   "amount",
   "dueDate",
+  "periodFrom",
+  "periodTo",
   "paymentLink"
 ] as const;
 
@@ -15,6 +17,7 @@ export type SmsTemplateKey =
   | "bill_generated"
   | "payment_reminder"
   | "overdue_reminder"
+  | "rent_reminder"
   | "payment_received"
   | "meter_reading_reminder";
 
@@ -57,13 +60,20 @@ export const DEFAULT_SMS_TEMPLATES: SmsTemplateDefinition[] = [
   },
   {
     id: "00000000-0000-4000-9000-000000000005",
+    key: "rent_reminder",
+    displayName: "Rent Reminder",
+    description: "Manually sent by the landlord for outstanding rent.",
+    body: "Rent reminder for Unit {{unitNumber}} covering {{periodFrom}} to {{periodTo}}. Total outstanding: {{amount}}. Please arrange payment."
+  },
+  {
+    id: "00000000-0000-4000-9000-000000000006",
     key: "payment_received",
     displayName: "Payment Received",
     description: "Sent when a payment receipt SMS is enabled in a workflow.",
     body: "Thank you. We have received {{amount}} for Unit {{unitNumber}} at {{estateName}}."
   },
   {
-    id: "00000000-0000-4000-9000-000000000006",
+    id: "00000000-0000-4000-9000-000000000007",
     key: "meter_reading_reminder",
     displayName: "Meter Reading Reminder",
     description: "Sent when a tenant needs to provide or confirm a reading.",

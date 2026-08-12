@@ -13,6 +13,8 @@ const exampleVariables = {
   billType: "1st July - 31st July 2026",
   amount: "£70.00",
   dueDate: "31/07/2026",
+  periodFrom: "01/07/2026",
+  periodTo: "31/07/2026",
   paymentLink: "https://yardle.andersonyard.co.uk/bill/example"
 };
 
