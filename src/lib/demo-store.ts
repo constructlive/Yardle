@@ -170,6 +170,7 @@ export function createDemoBillsForPeriod(periodId: string) {
     } else {
       demoData.bills.unshift(bill);
     }
+    unit.currentBalancePence = bill.remainingBalancePence;
     if (unit.tenantAccessEnabled && unit.tenantAccessToken && unit.tenantMobile) {
       addDemoSmsLog({ billId: bill.id, unitId: unit.id, mobile: unit.tenantMobile, message: buildBillSms(period, bill, getTenantBillUrl(unit.tenantAccessToken)), provider: "mock" });
     }

@@ -11,6 +11,7 @@
                     "db:setup":  "tsx scripts/db-setup.ts",
                     "db:seed":  "tsx scripts/db-seed.ts",
                     "create-admin":  "tsx scripts/create-admin.ts",
+                    "utility:reconcile-balances":  "tsx scripts/reconcile-utility-balances.ts",
                     "test":  "vitest run"
                 },
     "dependencies":  {
