@@ -1,6 +1,6 @@
 import { BrandLogo } from "@/components/brand-logo";
 import { getPublicBillData } from "@/lib/data";
-import { formatAccountBalance, formatMoney } from "@/lib/money";
+import { formatRoundedAccountBalance, formatRoundedMoney } from "@/lib/money";
 import { notFound } from "next/navigation";
 import { PrintStatementButton } from "./print-statement-button";
 
@@ -21,6 +21,9 @@ function periodDate(period?: { startDate: string; endDate: string }) {
   return `${new Date(period.startDate).toLocaleDateString("en-GB")} - ${new Date(period.endDate).toLocaleDateString("en-GB")}`;
 }
 
+function roundedPayableBalance(roundedTotalPence: number, amountPaidPence: number) {
+  return roundedTotalPence - amountPaidPence;
+}
 function broughtForwardLabel(pence: number) {
   if (pence < 0) return "Credit brought forward";
   if (pence > 0) return "Previous unpaid balance";
@@ -52,7 +55,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
   const thisMonthTotal = statementBills.reduce((sum, bill) => sum + bill.subtotalPence, 0);
   const billTotal = statementBills.reduce((sum, bill) => sum + bill.roundedTotalPence, 0);
   const paidTotal = statementBills.reduce((sum, bill) => sum + bill.amountPaidPence, 0);
-  const finalBalance = statementBills.length ? statementBills[statementBills.length - 1].remainingBalancePence : data.unit.currentBalancePence;
+  const finalBalance = statementBills.length ? roundedPayableBalance(statementBills[statementBills.length - 1].roundedTotalPence, statementBills[statementBills.length - 1].amountPaidPence) : data.unit.currentBalancePence;
   const rangeLabel = statementBills.length
     ? `${data.billingPeriods.find((period) => period.id === statementBills[0].billingPeriodId)?.name ?? "First selected bill"} to ${data.billingPeriods.find((period) => period.id === statementBills[statementBills.length - 1].billingPeriodId)?.name ?? "latest selected bill"}`
     : "No billing cycles selected";
@@ -74,10 +77,10 @@ export default async function StatementPage({ params, searchParams }: { params: 
         </header>
 
         <section className="mt-6 grid gap-4 sm:grid-cols-4 print:grid-cols-4">
-          <StatementMetric label="This month's charges" value={formatMoney(thisMonthTotal)} />
-          <StatementMetric label="Bill totals" value={formatMoney(billTotal)} />
-          <StatementMetric label="Payments received" value={formatMoney(paidTotal)} />
-          <StatementMetric label={finalBalance < 0 ? "Credit remaining" : "Final balance"} value={formatAccountBalance(finalBalance)} highlight />
+          <StatementMetric label="This month's charges" value={formatRoundedMoney(thisMonthTotal)} />
+          <StatementMetric label="Bill totals" value={formatRoundedMoney(billTotal)} />
+          <StatementMetric label="Payments received" value={formatRoundedMoney(paidTotal)} />
+          <StatementMetric label={finalBalance < 0 ? "Credit remaining" : "Final balance"} value={formatRoundedAccountBalance(finalBalance)} highlight />
         </section>
 
         <section className="mt-8">
@@ -88,7 +91,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
               <tbody className="divide-y divide-slateLine print:divide-[#d8e0e6]">
                 {statementBills.length ? statementBills.map((bill) => {
                   const period = data.billingPeriods.find((item) => item.id === bill.billingPeriodId);
-                  return <tr key={bill.id}><td className="px-4 py-3 font-bold">{period?.name ?? "-"}<br /><span className="text-xs font-semibold text-mutedText print:text-[#526170]">{periodDate(period)}</span></td><td className="px-4 py-3">{formatMoney(bill.subtotalPence)}</td><td className="px-4 py-3"><span className="block text-xs text-mutedText print:text-[#526170]">{broughtForwardLabel(bill.outstandingCarriedForwardPence)}</span>{formatAccountBalance(bill.outstandingCarriedForwardPence)}</td><td className="px-4 py-3">{formatMoney(bill.roundedTotalPence)}</td><td className="px-4 py-3">{formatMoney(bill.amountPaidPence)}</td><td className="px-4 py-3 font-black">{formatAccountBalance(bill.remainingBalancePence)}</td><td className="px-4 py-3 capitalize">{bill.paidStatus.replace("_", " ")}</td></tr>;
+                  return <tr key={bill.id}><td className="px-4 py-3 font-bold">{period?.name ?? "-"}<br /><span className="text-xs font-semibold text-mutedText print:text-[#526170]">{periodDate(period)}</span></td><td className="px-4 py-3">{formatRoundedMoney(bill.subtotalPence)}</td><td className="px-4 py-3"><span className="block text-xs text-mutedText print:text-[#526170]">{broughtForwardLabel(bill.outstandingCarriedForwardPence)}</span>{formatRoundedAccountBalance(bill.outstandingCarriedForwardPence)}</td><td className="px-4 py-3">{formatRoundedMoney(bill.roundedTotalPence)}</td><td className="px-4 py-3">{formatRoundedMoney(bill.amountPaidPence)}</td><td className="px-4 py-3 font-black">{formatRoundedAccountBalance(roundedPayableBalance(bill.roundedTotalPence, bill.amountPaidPence))}</td><td className="px-4 py-3 capitalize">{bill.paidStatus.replace("_", " ")}</td></tr>;
                 }) : <tr><td colSpan={7} className="px-4 py-8 text-center font-bold text-mutedText">No billing cycles selected.</td></tr>}
               </tbody>
             </table>
@@ -101,7 +104,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
             <table className="w-full min-w-[42rem] text-left text-sm">
               <thead className="bg-sidebar text-secondaryText print:bg-[#eef2f5] print:text-[#17212b]"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Method</th><th className="px-4 py-3">Notes</th></tr></thead>
               <tbody className="divide-y divide-slateLine print:divide-[#d8e0e6]">
-                {payments.length ? payments.map((payment) => <tr key={payment.id}><td className="px-4 py-3 font-bold">{new Date(payment.paymentDate).toLocaleDateString("en-GB")}</td><td className="px-4 py-3 font-black">{formatMoney(payment.amountPence)}</td><td className="px-4 py-3 capitalize">{paymentMethodLabel(payment.paymentMethod)}</td><td className="px-4 py-3 text-secondaryText print:text-[#44515f]">{payment.notes || "-"}</td></tr>) : <tr><td colSpan={4} className="px-4 py-8 text-center font-bold text-mutedText">No payments recorded for the selected billing cycles.</td></tr>}
+                {payments.length ? payments.map((payment) => <tr key={payment.id}><td className="px-4 py-3 font-bold">{new Date(payment.paymentDate).toLocaleDateString("en-GB")}</td><td className="px-4 py-3 font-black">{formatRoundedMoney(payment.amountPence)}</td><td className="px-4 py-3 capitalize">{paymentMethodLabel(payment.paymentMethod)}</td><td className="px-4 py-3 text-secondaryText print:text-[#44515f]">{payment.notes || "-"}</td></tr>) : <tr><td colSpan={4} className="px-4 py-8 text-center font-bold text-mutedText">No payments recorded for the selected billing cycles.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -114,3 +117,4 @@ export default async function StatementPage({ params, searchParams }: { params: 
 function StatementMetric({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return <div className="rounded-2xl border border-slateLine bg-sidebar p-4 print:border-[#d8e0e6] print:bg-[#f7f9fb]"><p className="text-xs font-black uppercase text-mutedText print:text-[#526170]">{label}</p><p className={`mt-2 text-2xl font-black ${highlight ? "text-estate-500 print:text-[#0f6f5f]" : "text-ink print:text-[#17212b]"}`}>{value}</p></div>;
 }
+

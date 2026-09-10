@@ -1,4 +1,4 @@
-import { formatAccountBalance, formatMoney, formatNumber } from "./money";
+import { formatMoney, formatNumber, formatRoundedAccountBalance, formatRoundedMoney } from "./money";
 import { DEFAULT_PAYMENT_INSTRUCTIONS, renderPaymentInstructions } from "./payment-instructions";
 import type { Bill, BillingPeriod, Estate, Unit } from "./types";
 
@@ -20,6 +20,9 @@ function paragraphs(value: string) {
     .join("\n  ");
 }
 
+function roundedPayableBalance(roundedTotalPence: number, amountPaidPence: number) {
+  return roundedTotalPence - amountPaidPence;
+}
 function broughtForwardLabel(pence: number) {
   if (pence < 0) return "Credit brought forward";
   if (pence > 0) return "Previous unpaid balance";
@@ -31,7 +34,7 @@ export function generateBillHtml(estate: Estate, unit: Unit, period: BillingPeri
     estateName: estate.name,
     tenantName: unit.tenantName || "Tenant",
     unitNumber: unit.unitReference,
-    amount: formatAccountBalance(bill.remainingBalancePence),
+    amount: formatRoundedAccountBalance(roundedPayableBalance(bill.roundedTotalPence, bill.amountPaidPence)),
     paymentLink: ""
   });
 
@@ -71,14 +74,14 @@ export function generateBillHtml(estate: Estate, unit: Unit, period: BillingPeri
       <tr><th>Current reading</th><td>${formatNumber(bill.currentReading)}</td></tr>
       <tr><th>Units used</th><td>${formatNumber(bill.usage)} kWh</td></tr>
       <tr><th>Price per kWh</th><td>${formatMoney(bill.kwhRatePence)}</td></tr>
-      <tr><th>Usage charge</th><td>${formatMoney(bill.usageCostPence)}</td></tr>
-      <tr><th>Standing charge</th><td>${formatMoney(bill.standingChargePence)}</td></tr>
-      <tr><th>Levy / other charges</th><td>${formatMoney(bill.levyPence)}</td></tr>
-      <tr><th>This month's charges</th><td>${formatMoney(bill.subtotalPence)}</td></tr>
-      <tr><th>${broughtForwardLabel(bill.outstandingCarriedForwardPence)}</th><td>${formatAccountBalance(bill.outstandingCarriedForwardPence)}</td></tr>
-      <tr><th>Bill total after brought forward balance</th><td>${formatMoney(bill.roundedTotalPence)}</td></tr>
-      <tr><th>Payments received</th><td>${formatMoney(bill.amountPaidPence)}</td></tr>
-      <tr><th>${bill.remainingBalancePence < 0 ? "Credit remaining" : "Amount now due"}</th><td class="total">${formatAccountBalance(bill.remainingBalancePence)}</td></tr>
+      <tr><th>Usage charge</th><td>${formatRoundedMoney(bill.usageCostPence)}</td></tr>
+      <tr><th>Standing charge</th><td>${formatRoundedMoney(bill.standingChargePence)}</td></tr>
+      <tr><th>Levy / other charges</th><td>${formatRoundedMoney(bill.levyPence)}</td></tr>
+      <tr><th>This month's charges</th><td>${formatRoundedMoney(bill.subtotalPence)}</td></tr>
+      <tr><th>${broughtForwardLabel(bill.outstandingCarriedForwardPence)}</th><td>${formatRoundedAccountBalance(bill.outstandingCarriedForwardPence)}</td></tr>
+      <tr><th>Bill total after brought forward balance</th><td>${formatRoundedMoney(bill.roundedTotalPence)}</td></tr>
+      <tr><th>Payments received</th><td>${formatRoundedMoney(bill.amountPaidPence)}</td></tr>
+      <tr><th>${roundedPayableBalance(bill.roundedTotalPence, bill.amountPaidPence) < 0 ? "Credit remaining" : "Amount now due"}</th><td class="total">${formatRoundedAccountBalance(roundedPayableBalance(bill.roundedTotalPence, bill.amountPaidPence))}</td></tr>
     </tbody>
   </table>
   <section class="instructions">
@@ -90,6 +93,4 @@ export function generateBillHtml(estate: Estate, unit: Unit, period: BillingPeri
 </body>
 </html>`;
 }
-
-
 
