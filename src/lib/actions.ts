@@ -11,7 +11,7 @@ import { serializeTenantMeta } from "./tenant-meta";
 import { createTenantAccessToken, getTenantBillUrl } from "./secure-link";
 import { renderSmsTemplate, saveSmsTemplate } from "./sms-templates";
 import { savePaymentInstructions } from "./payment-instructions";
-import { buildRentLedger, getRentDueDates, normaliseRentFrequency } from "./rent";
+import { buildRentAccountLedger, buildRentLedger, getRentDueDates, normaliseRentFrequency, serializeRentNotes } from "./rent";
 import { sendAndLogSms } from "./sms-logging";
 import { commitHistoricalImport, previewHistoricalImport, type HistoricalImportCommitState, type HistoricalImportPreviewState, type HistoricalImportPreviewRow } from "./historical-import";
 import { requireAdminSession } from "./session";
@@ -410,7 +410,7 @@ export async function sendRentReminderSms(input: { unitId: string; periodFrom: s
   if (!unit) return { ok: false, message: "Unit not found." };
   if (!unit.tenantMobile) return { ok: false, message: `No mobile number is recorded for Unit ${unit.unitReference}.` };
 
-  const ledgerRow = buildRentLedger(data.units, data.rentSettings, data.rentCharges, data.rentPayments).find((row) => row.unit.id === unit.id);
+  const ledgerRow = buildRentAccountLedger(data.units, data.rentSettings, data.rentCharges, data.rentPayments).find((row) => row.memberUnitIds.includes(unit.id));
   const totalPence = Math.max(0, ledgerRow?.balancePence ?? 0);
   if (totalPence <= 0) return { ok: false, message: `Unit ${unit.unitReference} has no outstanding rent to remind.` };
 
@@ -423,7 +423,7 @@ export async function sendRentReminderSms(input: { unitId: string; periodFrom: s
     message: await renderSmsTemplate("rent_reminder", {
       estateName: data.estate.name,
       tenantName: unit.tenantName || "Tenant",
-      unitNumber: unit.unitReference,
+      unitNumber: ledgerRow?.unitReferences || unit.unitReference,
       billType: "rent",
       amount,
       dueDate: periodTo,
@@ -502,7 +502,7 @@ export async function saveRentSetting(formData: FormData) {
   const startDate = text(formData.get("startDate")) || new Date().toISOString().slice(0, 10);
   const dueDayValue = Number(text(formData.get("dueDayOfMonth")) || "1");
   const dueDayOfMonth = frequency === "calendar_month" ? Math.min(28, Math.max(1, dueDayValue)) : undefined;
-  const notes = text(formData.get("notes")) || undefined;
+  const notes = serializeRentNotes(text(formData.get("notes")), text(formData.get("combinedAccount")));
 
   if (!unitId) return;
   if (enabled && amountPence <= 0) return;

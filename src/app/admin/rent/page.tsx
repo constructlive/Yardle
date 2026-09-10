@@ -1,7 +1,7 @@
 import { PageHeader, PrimaryButton, SecondaryButton, StatCard, StatusPill, DataTable, Th, Td } from "@/components/ui";
 import { generateRentCharges } from "@/lib/actions";
 import { getAppData } from "@/lib/data";
-import { buildRentLedger, rentFrequencyLabel, rentStatusLabel, rentStatusTone } from "@/lib/rent";
+import { buildRentAccountLedger, rentFrequencyLabel, rentStatusLabel, rentStatusTone } from "@/lib/rent";
 import { formatAccountBalance, formatMoney } from "@/lib/money";
 import { CalendarClock, HandCoins, Landmark, TrendingUp, Users } from "lucide-react";
 
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function RentDashboardPage({ searchParams }: { searchParams?: { rentGenerated?: string; rentUnits?: string } }) {
   const { units, rentSettings, rentCharges, rentPayments } = await getAppData();
-  const ledger = buildRentLedger(units, rentSettings, rentCharges, rentPayments);
+  const ledger = buildRentAccountLedger(units, rentSettings, rentCharges, rentPayments);
   const configured = ledger.filter((row) => row.enabled);
   const openingArrears = ledger.reduce((sum, row) => sum + Math.max(0, row.openingBalancePence), 0);
   const outstanding = ledger.reduce((sum, row) => sum + Math.max(0, row.balancePence), 0);
@@ -41,6 +41,6 @@ export default async function RentDashboardPage({ searchParams }: { searchParams
       <SecondaryButton href="/admin/rent/payments">Rent Payments</SecondaryButton>
       <SecondaryButton href="/admin/rent/arrears">Arrears</SecondaryButton>
     </section>
-    <DataTable><thead><tr><Th>Unit</Th><Th>Tenant</Th><Th>Rent rule</Th><Th>Opening</Th><Th>Due / credit</Th><Th>Next due</Th><Th>Status</Th></tr></thead><tbody>{ledger.slice(0, 12).map((row) => <tr key={row.unit.id}><Td strong>{row.unit.unitReference}</Td><Td>{row.unit.tenantName || "Vacant"}</Td><Td>{row.enabled ? `${formatMoney(row.weeklyOrMonthlyRentPence)} ${rentFrequencyLabel(row.frequency)}` : "Not configured"}</Td><Td>{formatAccountBalance(row.openingBalancePence)}</Td><Td strong>{formatAccountBalance(row.balancePence)}</Td><Td>{row.nextDueDate}</Td><Td><StatusPill tone={rentStatusTone(row.status)}>{rentStatusLabel(row.status)}</StatusPill></Td></tr>)}</tbody></DataTable>
+    <DataTable><thead><tr><Th>Unit(s)</Th><Th>Tenant / account</Th><Th>Rent rule</Th><Th>Opening</Th><Th>Due / credit</Th><Th>Next due</Th><Th>Status</Th></tr></thead><tbody>{ledger.slice(0, 12).map((row) => <tr key={row.memberUnitIds.join("-")}><Td strong>{row.unitReferences}</Td><Td>{row.tenantName}</Td><Td>{row.enabled ? `${formatMoney(row.weeklyOrMonthlyRentPence)} ${rentFrequencyLabel(row.frequency)}` : "Not configured"}</Td><Td>{formatAccountBalance(row.openingBalancePence)}</Td><Td strong>{formatAccountBalance(row.balancePence)}</Td><Td>{row.nextDueDate}</Td><Td><StatusPill tone={rentStatusTone(row.status)}>{rentStatusLabel(row.status)}</StatusPill></Td></tr>)}</tbody></DataTable>
   </>;
 }
