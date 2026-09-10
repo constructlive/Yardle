@@ -13,6 +13,7 @@
                     "create-admin":  "tsx scripts/create-admin.ts",
                     "utility:reconcile-balances":  "tsx scripts/reconcile-utility-balances.ts",
                     "utility:repair-current-bills":  "tsx scripts/repair-utility-bills.ts",
+                    "deploy":  "bash scripts/deploy.sh",
                     "test":  "vitest run"
                 },
     "dependencies":  {
@@ -37,3 +38,4 @@
                             "vitest":  "^4.1.10"
                         }
 }
+
