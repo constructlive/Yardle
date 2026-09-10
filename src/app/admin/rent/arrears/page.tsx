@@ -6,8 +6,8 @@ import { formatAccountBalance, formatMoney } from "@/lib/money";
 export const dynamic = "force-dynamic";
 
 export default async function RentArrearsPage() {
-  const { units, rentSettings, rentCharges, rentPayments } = await getAppData();
-  const ledger = buildRentAccountLedger(units, rentSettings, rentCharges, rentPayments).filter((row) => row.balancePence > 0);
+  const { units, rentSettings, rentCharges, rentPayments, rentAccounts, rentAccountUnits, rentServices } = await getAppData();
+  const ledger = buildRentAccountLedger(units, rentSettings, rentCharges, rentPayments, rentAccounts, rentAccountUnits, rentServices).filter((row) => row.balancePence > 0);
   const total = ledger.reduce((sum, row) => sum + row.balancePence, 0);
   return <>
     <PageHeader title="Rent Arrears" eyebrow="Rent Management" action={<PrimaryButton href="/admin/rent/checklist">Open checklist</PrimaryButton>} />

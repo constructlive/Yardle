@@ -8,8 +8,8 @@ import { CalendarClock, HandCoins, Landmark, TrendingUp, Users } from "lucide-re
 export const dynamic = "force-dynamic";
 
 export default async function RentDashboardPage({ searchParams }: { searchParams?: { rentGenerated?: string; rentUnits?: string } }) {
-  const { units, rentSettings, rentCharges, rentPayments } = await getAppData();
-  const ledger = buildRentAccountLedger(units, rentSettings, rentCharges, rentPayments);
+  const { units, rentSettings, rentCharges, rentPayments, rentAccounts, rentAccountUnits, rentServices } = await getAppData();
+  const ledger = buildRentAccountLedger(units, rentSettings, rentCharges, rentPayments, rentAccounts, rentAccountUnits, rentServices);
   const configured = ledger.filter((row) => row.enabled);
   const openingArrears = ledger.reduce((sum, row) => sum + Math.max(0, row.openingBalancePence), 0);
   const outstanding = ledger.reduce((sum, row) => sum + Math.max(0, row.balancePence), 0);

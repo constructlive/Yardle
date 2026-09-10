@@ -230,6 +230,52 @@ export async function ensureSeeded() {
     constraint chk_rent_payments_method check (payment_method in ('cash', 'bank_transfer', 'card', 'other'))
   ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci`);
   await database.execute(`create index if not exists idx_rent_charges_unit_due on rent_charges (unit_id, due_date)`);
-  await database.execute(`create index if not exists idx_rent_payments_unit_date on rent_payments (unit_id, payment_date)`);
+  await database.execute(`create table if not exists rent_accounts (
+    id char(36) primary key,
+    name varchar(255) not null,
+    contact_name varchar(255),
+    email varchar(255),
+    mobile varchar(64),
+    enabled tinyint(1) not null default 1,
+    frequency varchar(32) not null default 'calendar_month',
+    amount_pence int not null default 0,
+    opening_balance_pence int not null default 0,
+    start_date date,
+    due_day_of_month int,
+    notes text,
+    created_at datetime not null default current_timestamp,
+    updated_at datetime not null default current_timestamp on update current_timestamp,
+    constraint chk_rent_accounts_frequency check (frequency in ('weekly_monday', 'calendar_month', 'manual'))
+  ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci`);
+  await database.execute(`create table if not exists rent_account_units (
+    id char(36) primary key,
+    rent_account_id char(36) not null,
+    unit_id char(36) not null,
+    created_at datetime not null default current_timestamp,
+    unique key uq_rent_account_units_account_unit (rent_account_id, unit_id),
+    unique key uq_rent_account_units_unit (unit_id),
+    constraint fk_rent_account_units_account foreign key (rent_account_id) references rent_accounts(id) on delete cascade,
+    constraint fk_rent_account_units_unit foreign key (unit_id) references units(id) on delete cascade
+  ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci`);
+  await database.execute(`create table if not exists rent_services (
+    id char(36) primary key,
+    rent_account_id char(36) not null,
+    name varchar(255) not null,
+    service_type varchar(32) not null default 'service',
+    amount_pence int not null default 0,
+    frequency varchar(32) not null default 'calendar_month',
+    status varchar(32) not null default 'active',
+    start_date date,
+    due_day_of_month int,
+    notes text,
+    created_at datetime not null default current_timestamp,
+    updated_at datetime not null default current_timestamp on update current_timestamp,
+    constraint fk_rent_services_account foreign key (rent_account_id) references rent_accounts(id) on delete cascade,
+    constraint chk_rent_services_type check (service_type in ('parking_bay', 'storage', 'service', 'other')),
+    constraint chk_rent_services_status check (status in ('active', 'inactive')),
+    constraint chk_rent_services_frequency check (frequency in ('weekly_monday', 'calendar_month', 'manual'))
+  ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci`);
+  await database.execute(`create index if not exists idx_rent_accounts_name on rent_accounts (name)`);
+  await database.execute(`create index if not exists idx_rent_services_account on rent_services (rent_account_id, status)`);
   schemaChecked = true;
 }

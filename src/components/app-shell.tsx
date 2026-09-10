@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { BrandLogo } from "./brand-logo";
 import { logoutAdmin } from "@/lib/auth-actions";
-import { BarChart3, Bell, Building2, CalendarClock, ClipboardList, CreditCard, FileText, Gauge, HandCoins, Home, Landmark, LogOut, Menu, MessageSquare, ReceiptText, Settings, Upload, UserCircle, WalletCards, X } from "lucide-react";
+import { BarChart3, Bell, Building2, CalendarClock, ClipboardList, CreditCard, FileText, Gauge, HandCoins, Home, Landmark, LogOut, Menu, MessageSquare, ReceiptText, Settings, Upload, UserCircle, Users, WalletCards, X } from "lucide-react";
 import type { BillingPeriod } from "@/lib/types";
 
 type NavLink = [string, string, ComponentType<{ className?: string }>, string];
@@ -26,10 +26,11 @@ const utilityLinks: NavLink[] = [
 const rentLinks: NavLink[] = [
   ["Rent Dashboard", "/admin/rent", Home, "Rent"],
   ["Rent Checklist", "/admin/rent/checklist", HandCoins, "Checklist"],
+  ["Rent Accounts", "/admin/rent/accounts", Users, "Accounts"],
+  ["Services", "/admin/rent/services", Landmark, "Services"],
   ["Unit Rent Settings", "/admin/rent/settings", Building2, "Settings"],
   ["Rent Payments", "/admin/rent/payments", WalletCards, "Payments"],
   ["Arrears", "/admin/rent/arrears", CalendarClock, "Arrears"],
-  ["Reporting", "/admin/rent/arrears", BarChart3, "Reports"],
   ["SMS", "/admin/sms", MessageSquare, "SMS"],
   ["Settings", "/admin/settings", Settings, "Settings"]
 ];

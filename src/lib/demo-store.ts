@@ -2,7 +2,7 @@ import { calculateBill, calculateUsage } from "./billing";
 import { getTenantBillUrl } from "./secure-link";
 import { buildBillSms } from "./sms";
 import { nextPeriodDetails } from "./period-cycle";
-import { bills, billingPeriods, estate, meterReadings, payments, rentCharges, rentPayments, rentSettings, smsLogs, units, users } from "./demo-data";
+import { bills, billingPeriods, estate, meterReadings, payments, rentAccountUnits, rentAccounts, rentCharges, rentPayments, rentServices, rentSettings, smsLogs, units, users } from "./demo-data";
 import type { AppData } from "./data";
 import type { BillingPeriod, PaymentMethod, RentFrequency } from "./types";
 
@@ -17,7 +17,10 @@ const demoData: AppData = {
   smsLogs: smsLogs.map((item) => ({ ...item })),
   rentSettings: rentSettings.map((item) => ({ ...item })),
   rentCharges: rentCharges.map((item) => ({ ...item })),
-  rentPayments: rentPayments.map((item) => ({ ...item }))
+  rentPayments: rentPayments.map((item) => ({ ...item })),
+  rentAccounts: rentAccounts.map((item) => ({ ...item })),
+  rentAccountUnits: rentAccountUnits.map((item) => ({ ...item })),
+  rentServices: rentServices.map((item) => ({ ...item }))
 };
 
 export function getDemoAppData(): AppData {
@@ -274,7 +277,7 @@ export function saveDemoRentPayment(input: { unitId: string; amountPence: number
   });
 }
 
-export function addDemoRentCharges(input: { unitId: string; dueDates: string[]; amountPence: number }) {
+export function addDemoRentCharges(input: { unitId: string; dueDates: string[]; amountPence: number; notes?: string }) {
   for (const dueDate of input.dueDates) {
     if (demoData.rentCharges.some((charge) => charge.unitId === input.unitId && charge.dueDate === dueDate)) continue;
     demoData.rentCharges.unshift({
@@ -283,7 +286,46 @@ export function addDemoRentCharges(input: { unitId: string; dueDates: string[]; 
       dueDate,
       amountPence: input.amountPence,
       status: "due",
+      notes: input.notes,
       createdAt: new Date().toISOString()
     });
   }
+}
+export function saveDemoRentAccount(input: { id?: string; name: string; contactName?: string; email?: string; mobile?: string; enabled: boolean; frequency: RentFrequency; amountPence: number; openingBalancePence: number; startDate: string; dueDayOfMonth?: number; notes?: string; unitIds: string[] }) {
+  const now = new Date().toISOString();
+  const id = input.id || `demo-rent-account-${Date.now()}`;
+  const existingIndex = demoData.rentAccounts.findIndex((account) => account.id === id);
+  const account = {
+    id,
+    name: input.name,
+    contactName: input.contactName ?? "",
+    email: input.email ?? "",
+    mobile: input.mobile ?? "",
+    enabled: input.enabled,
+    frequency: input.frequency,
+    amountPence: input.amountPence,
+    openingBalancePence: input.openingBalancePence,
+    startDate: input.startDate,
+    dueDayOfMonth: input.dueDayOfMonth,
+    notes: input.notes,
+    createdAt: existingIndex >= 0 ? demoData.rentAccounts[existingIndex].createdAt : now,
+    updatedAt: now
+  };
+  if (existingIndex >= 0) demoData.rentAccounts[existingIndex] = account;
+  else demoData.rentAccounts.unshift(account);
+  demoData.rentAccountUnits = demoData.rentAccountUnits.filter((link) => link.rentAccountId !== id);
+  for (const unitId of input.unitIds) {
+    demoData.rentAccountUnits.push({ id: `demo-rent-account-unit-${id}-${unitId}`, rentAccountId: id, unitId, createdAt: now });
+  }
+  return account;
+}
+
+export function saveDemoRentService(input: { id?: string; rentAccountId: string; name: string; serviceType: "parking_bay" | "storage" | "service" | "other"; amountPence: number; frequency: RentFrequency; status: "active" | "inactive"; startDate: string; dueDayOfMonth?: number; notes?: string }) {
+  const now = new Date().toISOString();
+  const id = input.id || `demo-rent-service-${Date.now()}`;
+  const existingIndex = demoData.rentServices.findIndex((service) => service.id === id);
+  const service = { ...input, id, createdAt: existingIndex >= 0 ? demoData.rentServices[existingIndex].createdAt : now, updatedAt: now };
+  if (existingIndex >= 0) demoData.rentServices[existingIndex] = service;
+  else demoData.rentServices.unshift(service);
+  return service;
 }

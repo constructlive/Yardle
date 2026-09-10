@@ -1,6 +1,6 @@
 import { calculateBill, calculateUsage } from "./billing";
 import { poundsToPence } from "./money";
-import type { Bill, BillingPeriod, Estate, MeterReading, Payment, RentCharge, RentPayment, RentSetting, SmsLog, Unit, User } from "./types";
+import type { Bill, BillingPeriod, Estate, MeterReading, Payment, RentAccount, RentAccountUnit, RentCharge, RentPayment, RentService, RentSetting, SmsLog, Unit, User } from "./types";
 
 const now = "2026-06-01T09:00:00.000Z";
 const estateId = "estate-yardle";
@@ -175,6 +175,49 @@ export const rentSettings: RentSetting[] = units
     updatedAt: now
   }));
 
+
+export const rentAccounts: RentAccount[] = [
+  {
+    id: "rent-account-s6-customs",
+    name: "S6 Customs",
+    contactName: "S6 Customs",
+    email: "",
+    mobile: "07500111222",
+    enabled: true,
+    frequency: "calendar_month",
+    amountPence: poundsToPence(1200),
+    openingBalancePence: 0,
+    startDate: "2026-07-01",
+    dueDayOfMonth: 1,
+    notes: "Combined rent account for Units 17, 18 and 19.",
+    createdAt: now,
+    updatedAt: now
+  }
+];
+
+export const rentAccountUnits: RentAccountUnit[] = ["17", "18", "19"].map((reference) => ({
+  id: `rent-account-s6-${reference}`,
+  rentAccountId: "rent-account-s6-customs",
+  unitId: `unit-${reference}`,
+  createdAt: now
+}));
+
+export const rentServices: RentService[] = [
+  {
+    id: "rent-service-s6-parking-1",
+    rentAccountId: "rent-account-s6-customs",
+    name: "Parking Bay 1",
+    serviceType: "parking_bay",
+    amountPence: poundsToPence(40),
+    frequency: "calendar_month",
+    status: "active",
+    startDate: "2026-07-01",
+    dueDayOfMonth: 1,
+    notes: "Demo parking bay service",
+    createdAt: now,
+    updatedAt: now
+  }
+];
 export const rentCharges: RentCharge[] = rentSettings.flatMap((setting, index) => {
   const dates = setting.frequency === "calendar_month" ? ["2026-06-01", "2026-07-01"] : ["2026-06-08", "2026-06-15", "2026-06-22", "2026-06-29", "2026-07-06"];
   return dates.map((dueDate, chargeIndex) => ({

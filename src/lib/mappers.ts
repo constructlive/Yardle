@@ -1,4 +1,4 @@
-import type { Bill, BillingPeriod, Estate, MeterReading, Payment, RentCharge, RentPayment, RentSetting, SmsLog, Unit, User } from "./types";
+import type { Bill, BillingPeriod, Estate, MeterReading, Payment, RentAccount, RentAccountUnit, RentCharge, RentPayment, RentService, RentSetting, SmsLog, Unit, User } from "./types";
 
 function safeDateTime(value: unknown): string | undefined {
   if (value === null || value === undefined || value === "") return undefined;
@@ -202,5 +202,49 @@ export function mapRentPayment(row: any): RentPayment {
     reversedBy: row.reversed_by ?? undefined,
     reversalReason: row.reversal_reason ?? undefined,
     createdAt: requiredDateTime(row.created_at)
+  };
+}
+export function mapRentAccount(row: any): RentAccount {
+  return {
+    id: row.id,
+    name: row.name ?? "",
+    contactName: row.contact_name ?? "",
+    email: row.email ?? "",
+    mobile: row.mobile ?? "",
+    enabled: Boolean(row.enabled),
+    frequency: row.frequency,
+    amountPence: Number(row.amount_pence ?? 0),
+    openingBalancePence: Number(row.opening_balance_pence ?? 0),
+    startDate: requiredDate(row.start_date),
+    dueDayOfMonth: row.due_day_of_month === null || row.due_day_of_month === undefined ? undefined : Number(row.due_day_of_month),
+    notes: row.notes ?? undefined,
+    createdAt: requiredDateTime(row.created_at),
+    updatedAt: requiredDateTime(row.updated_at)
+  };
+}
+
+export function mapRentAccountUnit(row: any): RentAccountUnit {
+  return {
+    id: row.id,
+    rentAccountId: row.rent_account_id,
+    unitId: row.unit_id,
+    createdAt: requiredDateTime(row.created_at)
+  };
+}
+
+export function mapRentService(row: any): RentService {
+  return {
+    id: row.id,
+    rentAccountId: row.rent_account_id,
+    name: row.name ?? "",
+    serviceType: row.service_type,
+    amountPence: Number(row.amount_pence ?? 0),
+    frequency: row.frequency,
+    status: row.status,
+    startDate: requiredDate(row.start_date),
+    dueDayOfMonth: row.due_day_of_month === null || row.due_day_of_month === undefined ? undefined : Number(row.due_day_of_month),
+    notes: row.notes ?? undefined,
+    createdAt: requiredDateTime(row.created_at),
+    updatedAt: requiredDateTime(row.updated_at)
   };
 }

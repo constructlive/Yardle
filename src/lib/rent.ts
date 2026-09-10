@@ -1,4 +1,4 @@
-import type { PaymentMethod, RentCharge, RentFrequency, RentPayment, RentSetting, Unit } from "./types";
+import type { PaymentMethod, RentAccount, RentAccountUnit, RentCharge, RentFrequency, RentPayment, RentService, RentSetting, Unit } from "./types";
 
 export type RentLedgerRow = {
   unit: Unit;
@@ -17,6 +17,8 @@ export type RentLedgerRow = {
 };
 
 export type RentAccountLedgerRow = RentLedgerRow & {
+  account?: RentAccount;
+  services: RentService[];
   units: Unit[];
   memberUnitIds: string[];
   unitReferences: string;
@@ -96,7 +98,7 @@ export function rentStatusTone(status: RentLedgerRow["status"]) {
   return status === "arrears" ? "bad" as const : "warn" as const;
 }
 
-export function getRentDueDates(setting: RentSetting, throughDate = todayIso()) {
+export function getRentDueDates(setting: { enabled: boolean; frequency: RentFrequency; amountPence: number; startDate: string; dueDayOfMonth?: number }, throughDate = todayIso()) {
   if (!setting.enabled || setting.frequency === "manual" || setting.amountPence <= 0 || !setting.startDate) return [];
   const start = parseIsoDate(setting.startDate);
   const through = parseIsoDate(throughDate);
@@ -125,7 +127,7 @@ export function getRentDueDates(setting: RentSetting, throughDate = todayIso()) 
   return dates;
 }
 
-export function nextRentDueDate(setting?: RentSetting) {
+export function nextRentDueDate(setting?: { enabled: boolean; frequency: RentFrequency; dueDayOfMonth?: number }) {
   if (!setting || !setting.enabled || setting.frequency === "manual") return "-";
   const today = parseIsoDate(todayIso());
   if (!today) return "-";
@@ -174,45 +176,114 @@ export function buildRentLedger(units: Unit[], settings: RentSetting[], charges:
     .sort((a, b) => a.unit.unitReference.localeCompare(b.unit.unitReference, undefined, { numeric: true }));
 }
 
-export function buildRentAccountLedger(units: Unit[], settings: RentSetting[], charges: RentCharge[], payments: RentPayment[]): RentAccountLedgerRow[] {
-  const rows = buildRentLedger(units, settings, charges, payments).filter((row) => row.enabled || row.balancePence !== 0);
-  const grouped = new Map<string, RentLedgerRow[]>();
+export function buildRentAccountLedger(
+  units: Unit[],
+  settings: RentSetting[],
+  charges: RentCharge[],
+  payments: RentPayment[],
+  accounts: RentAccount[] = [],
+  accountUnits: RentAccountUnit[] = [],
+  services: RentService[] = []
+): RentAccountLedgerRow[] {
+  const unitRows = buildRentLedger(units, settings, charges, payments).filter((row) => row.enabled || row.balancePence !== 0);
+  const rowByUnitId = new Map(unitRows.map((row) => [row.unit.id, row]));
+  const assignedUnitIds = new Set(accountUnits.map((link) => link.unitId));
+  const accountRows: RentAccountLedgerRow[] = [];
 
-  for (const row of rows) {
-    const key = row.combinedAccount ? `account:${row.combinedAccount.toLowerCase()}` : `unit:${row.unit.id}`;
+  for (const account of accounts) {
+    const links = accountUnits.filter((link) => link.rentAccountId === account.id);
+    const linkedUnits = links.map((link) => units.find((unit) => unit.id === link.unitId)).filter((unit): unit is Unit => Boolean(unit));
+    const members = linkedUnits.map((unit) => rowByUnitId.get(unit.id) ?? fallbackRentRow(unit));
+    const primary = members[0];
+    if (!primary) continue;
+
+    const activeServices = services.filter((service) => service.rentAccountId === account.id && service.status === "active");
+    const memberIds = members.map((row) => row.unit.id);
+    const accountCharges = charges.filter((charge) => memberIds.includes(charge.unitId) && charge.status !== "cancelled");
+    const accountPayments = payments.filter((payment) => memberIds.includes(payment.unitId) && !payment.reversedAt);
+    const openingBalancePence = account.openingBalancePence;
+    const chargedPence = accountCharges.reduce((sum, charge) => sum + charge.amountPence, 0);
+    const paidPence = accountPayments.reduce((sum, payment) => sum + payment.amountPence, 0);
+    const balancePence = openingBalancePence + chargedPence - paidPence;
+    const rentAmount = account.amountPence + activeServices.reduce((sum, service) => sum + service.amountPence, 0);
+    const status: RentLedgerRow["status"] = !account.enabled ? "not_configured" : balancePence < 0 ? "credit" : balancePence === 0 ? "up_to_date" : balancePence > rentAmount ? "arrears" : "due";
+    const paymentDates = accountPayments.map((payment) => payment.paymentDate).sort().reverse();
+
+    accountRows.push({
+      ...primary,
+      account,
+      services: activeServices,
+      units: linkedUnits,
+      memberUnitIds: memberIds,
+      unitReferences: linkedUnits.map((unit) => unit.unitReference).join(", ") || "No units linked",
+      tenantName: account.name,
+      isCombined: linkedUnits.length > 1 || activeServices.length > 0,
+      enabled: account.enabled,
+      frequency: account.frequency,
+      weeklyOrMonthlyRentPence: rentAmount,
+      openingBalancePence,
+      chargedPence,
+      paidPence,
+      balancePence,
+      nextDueDate: nextRentDueDate(account),
+      lastPaymentDate: paymentDates[0],
+      status
+    });
+  }
+
+  const legacyRows = unitRows.filter((row) => !assignedUnitIds.has(row.unit.id));
+  const grouped = new Map<string, RentLedgerRow[]>();
+  for (const row of legacyRows) {
+    const key = row.combinedAccount ? `legacy-account:${row.combinedAccount.toLowerCase()}` : `unit:${row.unit.id}`;
     grouped.set(key, [...(grouped.get(key) ?? []), row]);
   }
 
-  return Array.from(grouped.values())
-    .map((members) => {
-      const primary = members[0];
-      const openingBalancePence = members.reduce((sum, row) => sum + row.openingBalancePence, 0);
-      const chargedPence = members.reduce((sum, row) => sum + row.chargedPence, 0);
-      const paidPence = members.reduce((sum, row) => sum + row.paidPence, 0);
-      const balancePence = openingBalancePence + chargedPence - paidPence;
-      const rentAmount = members.reduce((sum, row) => sum + row.weeklyOrMonthlyRentPence, 0);
-      const status: RentLedgerRow["status"] = !members.some((row) => row.enabled) ? "not_configured" : balancePence < 0 ? "credit" : balancePence === 0 ? "up_to_date" : balancePence > rentAmount ? "arrears" : "due";
-      const nextDueDates = members.map((row) => row.nextDueDate).filter((date) => date !== "-").sort();
-      const paymentDates = members.map((row) => row.lastPaymentDate).filter((date): date is string => Boolean(date)).sort().reverse();
-      const tenantName = primary.combinedAccount || primary.unit.tenantName || "Vacant";
-      return {
-        ...primary,
-        units: members.map((row) => row.unit),
-        memberUnitIds: members.map((row) => row.unit.id),
-        unitReferences: members.map((row) => row.unit.unitReference).join(", "),
-        tenantName,
-        isCombined: members.length > 1,
-        weeklyOrMonthlyRentPence: rentAmount,
-        openingBalancePence,
-        chargedPence,
-        paidPence,
-        balancePence,
-        nextDueDate: nextDueDates[0] ?? "-",
-        lastPaymentDate: paymentDates[0],
-        status
-      };
-    })
-    .sort((a, b) => a.unitReferences.localeCompare(b.unitReferences, undefined, { numeric: true }));
+  const groupedRows = Array.from(grouped.values()).map((members) => combineLegacyRows(members));
+  return [...accountRows, ...groupedRows].sort((a, b) => a.tenantName.localeCompare(b.tenantName, undefined, { numeric: true }));
+}
+
+function fallbackRentRow(unit: Unit): RentLedgerRow {
+  return {
+    unit,
+    enabled: false,
+    frequency: "weekly_monday",
+    weeklyOrMonthlyRentPence: 0,
+    openingBalancePence: 0,
+    chargedPence: 0,
+    paidPence: 0,
+    balancePence: 0,
+    nextDueDate: "-",
+    status: "not_configured"
+  };
+}
+
+function combineLegacyRows(members: RentLedgerRow[]): RentAccountLedgerRow {
+  const primary = members[0];
+  const openingBalancePence = members.reduce((sum, row) => sum + row.openingBalancePence, 0);
+  const chargedPence = members.reduce((sum, row) => sum + row.chargedPence, 0);
+  const paidPence = members.reduce((sum, row) => sum + row.paidPence, 0);
+  const balancePence = openingBalancePence + chargedPence - paidPence;
+  const rentAmount = members.reduce((sum, row) => sum + row.weeklyOrMonthlyRentPence, 0);
+  const status: RentLedgerRow["status"] = !members.some((row) => row.enabled) ? "not_configured" : balancePence < 0 ? "credit" : balancePence === 0 ? "up_to_date" : balancePence > rentAmount ? "arrears" : "due";
+  const nextDueDates = members.map((row) => row.nextDueDate).filter((date) => date !== "-").sort();
+  const paymentDates = members.map((row) => row.lastPaymentDate).filter((date): date is string => Boolean(date)).sort().reverse();
+  return {
+    ...primary,
+    services: [],
+    units: members.map((row) => row.unit),
+    memberUnitIds: members.map((row) => row.unit.id),
+    unitReferences: members.map((row) => row.unit.unitReference).join(", "),
+    tenantName: primary.combinedAccount || primary.unit.tenantName || "Vacant",
+    isCombined: members.length > 1,
+    weeklyOrMonthlyRentPence: rentAmount,
+    openingBalancePence,
+    chargedPence,
+    paidPence,
+    balancePence,
+    nextDueDate: nextDueDates[0] ?? "-",
+    lastPaymentDate: paymentDates[0],
+    status
+  };
 }
 
 function parseIsoDate(value: string) {

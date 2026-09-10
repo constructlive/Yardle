@@ -10,10 +10,10 @@ import { CalendarClock, CheckCircle2 } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function RentChecklistPage() {
-  const { units, rentSettings, rentCharges, rentPayments } = await getAppData();
+  const { units, rentSettings, rentCharges, rentPayments, rentAccounts, rentAccountUnits, rentServices } = await getAppData();
   const smsTemplates = await getSmsTemplates();
   const rentReminderTemplate = smsTemplates.find((template) => template.templateKey === "rent_reminder")?.body ?? "Rent reminder for Unit {{unitNumber}} covering {{periodFrom}} to {{periodTo}}. Total outstanding: {{amount}}. Please arrange payment.";
-  const ledger = buildRentAccountLedger(units, rentSettings, rentCharges, rentPayments);
+  const ledger = buildRentAccountLedger(units, rentSettings, rentCharges, rentPayments, rentAccounts, rentAccountUnits, rentServices);
   const outstanding = ledger.reduce((sum, row) => sum + Math.max(0, row.balancePence), 0);
 
   return <>
