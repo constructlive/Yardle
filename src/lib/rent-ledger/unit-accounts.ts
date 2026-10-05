@@ -5,7 +5,7 @@ import type { LedgerAccount, Schedule } from "./types";
 
 export const tenantGroupId = (account: LedgerAccount) => account.tenantGroupId || account.id;
 export function canSetUpUnitRent(account: LedgerAccount) {
-  return account.state === "review" && !account.approval && !account.charges.length && !account.payments.length && !account.adjustments.length && !account.portalEnabled && !account.portalScope;
+  return !account.archivedAt && account.state === "review" && !account.approval && !account.charges.length && !account.payments.length && !account.adjustments.length && !account.portalEnabled && !account.portalScope;
 }
 export type UnitRentInput = { parentId: string; version: number; requestId: string; unitId: string; unitReference: string; sourceVersion?: number; confirmMove: boolean; schedule: Schedule };
 /** Mutates only a transaction-local copy. Tenant grouping is administrative, never portal authorisation. */
@@ -20,12 +20,12 @@ export function prepareUnitRentAccount(accounts: LedgerAccount[], input: UnitRen
     }
   }
   if(accounts.some(a=>a.id===input.requestId))throw new RentError("Setup request conflicts with an existing account. Refresh and try again.");
-  const parent=accounts.find(a=>a.id===input.parentId);
+  const parent=accounts.find(a=>!a.archivedAt&&a.id===input.parentId);
   if (!parent || parent.version!==input.version) throw new RentError("Tenant account changed. Refresh and review again.");
   if (tenantGroupId(parent)!==parent.id) throw new RentError("Open the tenant’s main row to add a unit account.");
   assertSchedule(input.schedule);
   if (input.schedule.kind!=="rent" || input.schedule.rates[0].amountPence<=0) throw new RentError("Enter the agreed rent for this unit.");
-  const owners=accounts.filter(a=>a.unitIds.includes(input.unitId));
+  const owners=accounts.filter(a=>!a.archivedAt&&a.unitIds.includes(input.unitId));
   if (owners.length>1) throw new RentError("This unit has conflicting assignments. Resolve them before setting up rent.");
   const owner=owners[0];
   if (owner && tenantGroupId(owner)!==parent.id) throw new RentError("This unit belongs to another tenant. Change its assignment first.");
@@ -51,9 +51,9 @@ export function prepareUnitRentAccount(accounts: LedgerAccount[], input: UnitRen
 
 export function prepareRentAccountGrouping(accounts:LedgerAccount[],parentId:string,parentVersion:number,sourceId:string,sourceVersion:number,actor:string){
   const parent=accounts.find(a=>a.id===parentId),source=accounts.find(a=>a.id===sourceId);
-  if(!parent||!source||parent.id===source.id)throw new RentError("Choose a different existing rent account.");
+  if(!parent||!source||parent.archivedAt||source.archivedAt||parent.id===source.id)throw new RentError("Choose a different existing rent account.");
   if(parent.version!==parentVersion||source.version!==sourceVersion)throw new RentError("An account changed. Refresh and review the link again.");
-  if(tenantGroupId(parent)!==parent.id||tenantGroupId(source)!==source.id||accounts.some(a=>a.id!==source.id&&tenantGroupId(a)===source.id))throw new RentError("This account already belongs to a tenant group. Open that tenant’s row instead.");
+  if(tenantGroupId(parent)!==parent.id||tenantGroupId(source)!==source.id||accounts.some(a=>!a.archivedAt&&a.id!==source.id&&tenantGroupId(a)===source.id))throw new RentError("This account already belongs to a tenant group. Open that tenant’s row instead.");
   source.tenantGroupId=parent.id;source.version++;parent.version++;
   const detail={tenantAccountId:parent.id,linkedAccountId:source.id,reason:"Administrator explicitly grouped these accounts for one tenant. Balances, allocations and portal permissions remain separate."};
   for(const a of [parent,source])a.audit.push({id:randomUUID(),actor,at:new Date().toISOString(),type:"tenant_rent_account_linked",detail});

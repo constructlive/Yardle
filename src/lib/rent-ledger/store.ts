@@ -1,3 +1,4 @@
+import { prepareAccountArchive } from "./archive";
 import { prepareRentAccountGrouping, prepareUnitRentAccount, type UnitRentInput } from "./unit-accounts";
 import { RentError } from "./errors";
 import { randomUUID } from "node:crypto";
@@ -64,16 +65,16 @@ export async function initializeLedger() {
   })();
   try { await state.initializing; } finally { state.initializing = undefined; }
 }
-export async function readAccounts() {
+export async function readAccounts(includeArchived = false) {
   await initializeLedger();
-  if (!hasDatabaseUrl()) return [...memory.values()].map(a => structuredClone(a));
+  if (!hasDatabaseUrl()) return [...memory.values()].filter(a => includeArchived || !a.archivedAt).map(a => structuredClone(a));
   const result = await query<{ state_json: string }>("select state_json from rent_ledger_accounts order by id");
-  return result.rows.map(r => JSON.parse(r.state_json) as LedgerAccount);
+  return result.rows.map(r => JSON.parse(r.state_json) as LedgerAccount).filter(a => includeArchived || !a.archivedAt);
 }
 /** Account aggregate is locked for every mutation; events append in the same transaction. */
 export async function mutateAccount<T>(id: string, change: (account: LedgerAccount) => T, expectedVersion?: number): Promise<T> {
   await initializeLedger();
-  const apply = (a: LedgerAccount) => { if (expectedVersion !== undefined && a.version !== expectedVersion) throw new RentError("This account changed. Refresh and review the preview again."); return change(a); };
+  const apply = (a: LedgerAccount) => { if (a.archivedAt) throw new RentError("This account has been removed and is read-only."); if (expectedVersion !== undefined && a.version !== expectedVersion) throw new RentError("This account changed. Refresh and review the preview again."); return change(a); };
   if (!hasDatabaseUrl()) {
     let release!: () => void; const previous = state.serial; state.serial = new Promise<void>(r => { release = r; }); await previous;
     try { const stored = memory.get(id); if (!stored) throw new RentError("Account not found."); const a = structuredClone(stored); const before = JSON.stringify(a); const result = apply(a); if (before !== JSON.stringify(a)) { a.version++; memory.set(id, a); } return result; } finally { release(); }
@@ -92,7 +93,7 @@ export async function mutateAccount<T>(id: string, change: (account: LedgerAccou
   });
 }
 export function catchUpAccount(account: LedgerAccount, asOf = today()) {
-  if (account.state !== "active") return 0;
+  if (account.archivedAt || account.state !== "active") return 0;
   const existing = new Set(account.charges.map(c => c.id));
   const charges = projectCharges(account, asOf).filter(c => c.dueDate <= asOf && !existing.has(c.id));
   if (charges.length) { account.charges.push(...charges); audit(account, "scheduler", "charges_created", charges); }
@@ -120,8 +121,8 @@ export async function createAccount(account: LedgerAccount) {
 export async function setUnitMembership(id: string, unitIds: string[], expectedVersion: number, actor: string, reason: string) {
   await initializeLedger();
   const apply = (accounts: LedgerAccount[]) => {
-    const a = accounts.find(a => a.id === id); if (!a || a.version !== expectedVersion) throw new RentError("Account changed. Refresh and review again.");
-    if (accounts.some(other => other.id !== id && other.unitIds.some(u => unitIds.includes(u)))) throw new RentError("A selected unit already belongs to another account. Remove its old link first.");
+    const a = accounts.find(a => a.id === id); if (!a || a.archivedAt || a.version !== expectedVersion) throw new RentError("Account changed. Refresh and review again.");
+    if (accounts.some(other => !other.archivedAt && other.id !== id && other.unitIds.some(u => unitIds.includes(u)))) throw new RentError("A selected unit already belongs to another account. Remove its old link first.");
     const before = [...a.unitIds]; a.unitIds = [...new Set(unitIds)];
     const changed = before.length !== a.unitIds.length || before.some(id => !a.unitIds.includes(id));
     if (changed) {
@@ -170,19 +171,26 @@ export async function setUpUnitRentAccount(input: UnitRentInput, actor: string) 
   });
 }
 
-export async function groupExistingRentAccount(parentId:string,parentVersion:number,sourceId:string,sourceVersion:number,actor:string){
+async function changeAccountGroup(prepare: (accounts: LedgerAccount[]) => LedgerAccount[]){
   await initializeLedger();
   if(!hasDatabaseUrl()){
     let release!:()=>void;const previous=state.serial;state.serial=new Promise<void>(r=>{release=r;});await previous;
-    try{const changed=prepareRentAccountGrouping([...memory.values()].map(a=>structuredClone(a)),parentId,parentVersion,sourceId,sourceVersion,actor);for(const a of changed)memory.set(a.id,a);}finally{release();}return;
+    try{const changed=prepare([...memory.values()].map(a=>structuredClone(a)));for(const a of changed)memory.set(a.id,a);}finally{release();}return;
   }
   await transaction(async client=>{
     await client.query("select id from rent_ledger_meta where id='migration-v1' for update");
     const rows=await client.query<{state_json:string}>("select state_json from rent_ledger_accounts order by id for update");
-    const changed=prepareRentAccountGrouping(rows.rows.map(r=>JSON.parse(r.state_json)),parentId,parentVersion,sourceId,sourceVersion,actor);
+    const changed=prepare(rows.rows.map(r=>JSON.parse(r.state_json)));
     for(const account of changed){
       await client.query("update rent_ledger_accounts set version=?,state_json=? where id=?",[account.version,JSON.stringify(account),account.id]);
       const event=account.audit.at(-1)!;await client.query("insert into rent_ledger_events (id,account_id,actor,event_type,detail_json) values (?,?,?,?,?)",[event.id,account.id,event.actor,event.type,JSON.stringify(event)]);
     }
   });
+}
+
+export async function groupExistingRentAccount(parentId:string,parentVersion:number,sourceId:string,sourceVersion:number,actor:string){
+  return changeAccountGroup(accounts => prepareRentAccountGrouping(accounts,parentId,parentVersion,sourceId,sourceVersion,actor));
+}
+export async function archiveRentAccount(id:string,version:number,actor:string){
+  return changeAccountGroup(accounts => prepareAccountArchive(accounts,id,version,actor));
 }

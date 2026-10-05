@@ -6,8 +6,8 @@ const providerSend = vi.hoisted(() => vi.fn());
 vi.mock("../sms", () => ({ getSmsProvider: () => ({ send: providerSend }) }));
 vi.mock("../sms-logging", () => ({ getActiveSmsProviderName: async () => "mock", sendAndLogSms: vi.fn() }));
 import { randomUUID } from "node:crypto";
-import { addAdjustment, addRate, allocateCredit, approveReconciliation, previewReceipt, previewReconciliation, recordReceipt, reverseReceipt, sendReceiptConfirmation } from "./actions";
-import { catchUpAccount, createAccount, mutateAccount, readAccounts, setUnitMembership } from "./store";
+import { removeRentAccount, addAdjustment, addRate, allocateCredit, approveReconciliation, previewReceipt, previewReconciliation, recordReceipt, reverseReceipt, sendReceiptConfirmation } from "./actions";
+import { archiveRentAccount, catchUpAccount, createAccount, mutateAccount, readAccounts, setUnitMembership } from "./store";
 import { balances, chargesWithProjections, rentCoverage, today } from "./engine";
 import type { LedgerAccount, PaymentInput } from "./types";
 
@@ -95,5 +95,51 @@ describe("manual tenant unit assignment", () => {
     const saved=await current(a.id);
     expect(saved.portalEnabled).toBe(false);expect(saved.portalToken).toBeUndefined();expect(saved.portalScope).toBeUndefined();expect(saved.portalGrants![0].revokedAt).toBeTruthy();
     expect(saved.audit.at(-1)?.detail).toMatchObject({before:["old-unit"],after:["new-unit"],portalAccessRevoked:true});
+  });
+});
+
+
+describe("removing rent accounts", () => {
+  it("requires confirmation and a current version", async () => {
+    const a = await draft();
+    await expect(removeRentAccount(form(a, {}))).rejects.toThrow(/Confirm/);
+    await expect(archiveRentAccount(a.id, a.version + 1, "admin")).rejects.toThrow(/changed/);
+    expect(await current(a.id)).toBeDefined();
+  });
+  it("preserves money, revokes access, stops charges and allows units to be reassigned", async () => {
+    let a = await activate("100.00");
+    await recordReceipt(payment(a));
+    a = await current(a.id);
+    const unit = randomUUID();
+    await setUnitMembership(a.id, [unit], a.version, "admin", "Confirmed unit");
+    await mutateAccount(a.id, x => { x.portalEnabled = true; x.portalToken = "a".repeat(64); x.portalScope = []; x.portalGrants = [{ id: randomUUID(), unitId: unit, tokenHash: "hash", tenancy: "old", billIds: [], linkedAt: today(), actor: "admin" }]; });
+    a = await current(a.id);
+    await removeRentAccount(form(a, { confirmed: "on" }));
+    expect(await current(a.id)).toBeUndefined();
+    const archived = (await readAccounts(true)).find(x => x.id === a.id)!;
+    expect(archived.charges).toEqual(a.charges);
+    expect(archived.payments).toEqual(a.payments);
+    expect(archived.migration).toEqual(a.migration);
+    expect(archived.portalToken).toBeUndefined();
+    expect(archived.portalScope).toBeUndefined();
+    expect(archived.portalEnabled).toBe(false);
+    expect(archived.portalGrants![0].revokedAt).toBeTruthy();
+    expect(catchUpAccount(archived, "2027-01-01")).toBe(0);
+    await expect(mutateAccount(a.id, x => { x.state = "active"; })).rejects.toThrow(/read-only/);
+    await expect(setUnitMembership(a.id, [], archived.version, "admin", "Change")).rejects.toThrow();
+    const replacement = await draft();
+    await setUnitMembership(replacement.id, [unit], replacement.version, "admin", "Reassigned");
+    expect((await current(replacement.id)).unitIds).toEqual([unit]);
+    await archiveRentAccount(a.id, a.version, "admin");
+    expect((await readAccounts(true)).find(x => x.id === a.id)!.audit.filter(e => e.type === "account_archived")).toHaveLength(1);
+  });
+  it("keeps other accounts visible when removing their group parent", async () => {
+    const parent = await draft(), child = await draft();
+    await mutateAccount(child.id, a => { a.tenantGroupId = parent.id; });
+    await archiveRentAccount(parent.id, parent.version, "admin");
+    const remaining = await current(child.id);
+    expect(remaining.tenantGroupId).toBeUndefined();
+    expect(remaining.audit.at(-1)?.type).toBe("tenant_group_removed");
+    expect(remaining.schedules).toEqual(child.schedules);
   });
 });

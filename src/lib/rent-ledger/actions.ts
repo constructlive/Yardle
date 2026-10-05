@@ -7,7 +7,7 @@ import { requireAdminSession } from "../session";
 import { getSmsProvider } from "../sms";
 import { getActiveSmsProviderName } from "../sms-logging";
 import { addDays, assertSchedule, balances, chargesWithProjections, coveredByAllocation, date, money, paymentMessage, previewPayment, projectCharges, today, validatePayment } from "./engine";
-import { audit, catchUpAccount, createAccount, getLedgerAccounts, mutateAccount, readAccounts, setUnitMembership, setUpUnitRentAccount, groupExistingRentAccount } from "./store";
+import { archiveRentAccount, audit, catchUpAccount, createAccount, getLedgerAccounts, mutateAccount, readAccounts, setUnitMembership, setUpUnitRentAccount, groupExistingRentAccount } from "./store";
 import type { LedgerAccount, PaymentInput, Receipt, Schedule } from "./types";
 
 function refresh() { revalidatePath("/admin/rent", "layout"); }
@@ -220,4 +220,11 @@ export async function linkExistingRentAccount(f:FormData){
   let selected:unknown;try{selected=JSON.parse(value(f,"accountToLink"));}catch{throw new RentError("Choose a rent account to link.");}
   if(!Array.isArray(selected)||selected.length!==2||typeof selected[0]!=="string"||!Number.isInteger(selected[1]))throw new RentError("Choose a valid rent account.");
   await groupExistingRentAccount(value(f,"parentId"),version(f),selected[0],selected[1],user.userId);refresh();
+}
+
+export async function removeRentAccount(f: FormData) {
+  const user = await requireAdminSession();
+  if (value(f, "confirmed") !== "on") throw new RentError("Confirm that you want to remove this rent account.");
+  await archiveRentAccount(value(f, "accountId"), version(f), user.userId);
+  refresh();
 }

@@ -30,6 +30,7 @@ export type TenantQuery = {
   adminReadCount: number; tenantReadCount: number;
 };
 export type LedgerAccount = {
+  archivedAt?: string;
   /** Administrative tenant grouping only; does not grant access to another account. */
   tenantGroupId?: string;
   id: string; name: string; contactName: string; mobile: string; email: string; unitIds: string[];

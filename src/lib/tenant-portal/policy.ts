@@ -32,7 +32,7 @@ export function resolvePrincipal(token: string, accounts: LedgerAccount[], units
   if (!/^[A-Za-z0-9_-]{32,128}$/.test(token)) return undefined;
   const hash = tokenHash(token);
   const matching = accounts.filter(a => {
-    if (!a.portalEnabled || !scopeIsCurrent(a, units)) return false;
+    if (a.archivedAt || !a.portalEnabled || !scopeIsCurrent(a, units)) return false;
     if (a.portalToken && sameSecret(a.portalToken, token)) return true;
     return a.portalGrants?.some(g => {
       const u = units.find(u => u.id === g.unitId);
@@ -42,6 +42,6 @@ export function resolvePrincipal(token: string, accounts: LedgerAccount[], units
   if (matching.length !== 1) return undefined;
   const account = matching[0];
   // Any overlapping account membership is ambiguous, even if one grant was approved.
-  if (accounts.some(a => a.id !== account.id && a.unitIds.some(id => account.unitIds.includes(id)))) return undefined;
+  if (accounts.some(a => !a.archivedAt && a.id !== account.id && a.unitIds.some(id => account.unitIds.includes(id)))) return undefined;
   return { accountId: account.id, method: "private_link", credentialHash: hash };
 }

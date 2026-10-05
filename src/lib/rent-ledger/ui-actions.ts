@@ -31,3 +31,5 @@ export async function allocateCredit(...args: Parameters<typeof ledger.allocateC
 export async function createUnitRent(...args: Parameters<typeof ledger.createUnitRent>) { return safely(() => ledger.createUnitRent(...args)); }
 
 export async function linkExistingRentAccount(...args: Parameters<typeof ledger.linkExistingRentAccount>) { return safely(() => ledger.linkExistingRentAccount(...args)); }
+
+export async function removeRentAccount(...args: Parameters<typeof ledger.removeRentAccount>) { return safely(() => ledger.removeRentAccount(...args)); }
