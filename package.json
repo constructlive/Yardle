@@ -14,6 +14,8 @@
                     "utility:reconcile-balances":  "tsx scripts/reconcile-utility-balances.ts",
                     "utility:repair-current-bills":  "tsx scripts/repair-utility-bills.ts",
                     "deploy":  "bash scripts/deploy.sh",
+                    "rent:catch-up": "tsx scripts/rent-catch-up.ts",
+                    "rent:worker": "tsx scripts/rent-worker.ts",
                     "test":  "vitest run"
                 },
     "dependencies":  {

@@ -11,12 +11,12 @@ import { serializeTenantMeta } from "./tenant-meta";
 import { createTenantAccessToken, getTenantBillUrl } from "./secure-link";
 import { renderSmsTemplate, saveSmsTemplate } from "./sms-templates";
 import { savePaymentInstructions } from "./payment-instructions";
-import { buildRentAccountLedger, buildRentLedger, getRentDueDates, normaliseRentFrequency, serializeRentNotes } from "./rent";
+
 import { sendAndLogSms } from "./sms-logging";
 import { commitHistoricalImport, previewHistoricalImport, type HistoricalImportCommitState, type HistoricalImportPreviewState, type HistoricalImportPreviewRow } from "./historical-import";
 import { requireAdminSession } from "./session";
-import { addDemoRentCharges, archiveDemoUnit, regenerateDemoTenantAccessToken, saveDemoBillingPeriod, saveDemoEstate, saveDemoMeterReading, saveDemoPaymentUpdate, saveDemoRentAccount, saveDemoRentPayment, saveDemoRentService, saveDemoRentSetting, saveDemoUnit } from "./demo-store";
-import type { PaymentMethod, RentServiceType } from "./types";
+import { archiveDemoUnit, regenerateDemoTenantAccessToken, saveDemoBillingPeriod, saveDemoEstate, saveDemoMeterReading, saveDemoPaymentUpdate, saveDemoUnit } from "./demo-store";
+import type { PaymentMethod } from "./types";
 function text(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
 }
@@ -403,44 +403,10 @@ export async function saveReminderForBill(billId: string) {
   revalidatePath("/admin/landlord");
 }
 
-export async function sendRentReminderSms(input: { unitId: string; periodFrom: string; periodTo: string }) {
+export async function sendRentReminderSms(_input: { unitId: string; periodFrom: string; periodTo: string }) {
   await requireAdminSession();
-  const data = await getAppData();
-  const unit = data.units.find((item) => item.id === input.unitId);
-  if (!unit) return { ok: false, message: "Unit not found." };
-  if (!unit.tenantMobile) return { ok: false, message: `No mobile number is recorded for Unit ${unit.unitReference}.` };
-
-  const ledgerRow = buildRentAccountLedger(data.units, data.rentSettings, data.rentCharges, data.rentPayments, data.rentAccounts, data.rentAccountUnits, data.rentServices).find((row) => row.memberUnitIds.includes(unit.id));
-  const totalPence = Math.max(0, ledgerRow?.balancePence ?? 0);
-  if (totalPence <= 0) return { ok: false, message: `Unit ${unit.unitReference} has no outstanding rent to remind.` };
-
-  const amount = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(totalPence / 100);
-  const periodFrom = formatSmsDate(input.periodFrom);
-  const periodTo = formatSmsDate(input.periodTo);
-  const log = await sendAndLogSms({
-    unitId: unit.id,
-    mobile: unit.tenantMobile,
-    message: await renderSmsTemplate("rent_reminder", {
-      estateName: data.estate.name,
-      tenantName: unit.tenantName || "Tenant",
-      unitNumber: ledgerRow?.unitReferences || unit.unitReference,
-      billType: "rent",
-      amount,
-      dueDate: periodTo,
-      periodFrom,
-      periodTo,
-      paymentLink: ""
-    })
-  });
-  revalidatePath("/admin/sms");
-  revalidatePath("/admin/rent");
-  revalidatePath("/admin/rent/checklist");
-  return {
-    ok: log.status !== "failed",
-    message: log.status === "failed" ? `Rent SMS failed: ${log.failureReason || "provider rejected the message."}` : `Rent reminder ${log.status === "simulated" ? "simulated" : "sent"} to Unit ${unit.unitReference}.`
-  };
+  return { ok: false, message: "Unit-based rent reminders are retired. Use the rent account ledger and account contact." };
 }
-
 export async function regenerateTenantBillLink(formData: FormData) {
   await requireAdminSession();
   const unitId = text(formData.get("unitId"));
@@ -492,217 +458,9 @@ export async function sendTenantBillLinkSms(input: FormData | string) {
   };
 }
 
-export async function saveRentSetting(formData: FormData) {
-  await requireAdminSession();
-  const unitId = text(formData.get("unitId"));
-  const enabled = bool(formData.get("enabled"));
-  const frequency = normaliseRentFrequency(text(formData.get("frequency")));
-  const amountPence = pence(formData.get("amount")) ?? 0;
-  const openingBalancePence = pence(formData.get("openingBalance")) ?? 0;
-  const startDate = text(formData.get("startDate")) || new Date().toISOString().slice(0, 10);
-  const dueDayValue = Number(text(formData.get("dueDayOfMonth")) || "1");
-  const dueDayOfMonth = frequency === "calendar_month" ? Math.min(28, Math.max(1, dueDayValue)) : undefined;
-  const notes = serializeRentNotes(text(formData.get("notes")), text(formData.get("combinedAccount")));
-
-  if (!unitId) return;
-  if (enabled && amountPence <= 0) return;
-
-  if (!hasDatabaseUrl()) {
-    saveDemoRentSetting({ unitId, enabled, frequency, amountPence, openingBalancePence, startDate, dueDayOfMonth, notes });
-    revalidatePath("/admin/rent");
-    revalidatePath("/admin/rent/settings");
-    revalidatePath("/admin/rent/checklist");
-    return;
-  }
-
-  await ensureSeeded();
-  await query(
-    `insert into rent_settings (id, unit_id, enabled, frequency, amount_pence, opening_balance_pence, start_date, due_day_of_month, notes)
-     values (?,?,?,?,?,?,?,?,?)
-     on duplicate key update enabled=values(enabled), frequency=values(frequency), amount_pence=values(amount_pence), opening_balance_pence=values(opening_balance_pence), start_date=values(start_date), due_day_of_month=values(due_day_of_month), notes=values(notes), updated_at=utc_timestamp()`,
-    [randomUUID(), unitId, enabled, frequency, amountPence, openingBalancePence, startDate, dueDayOfMonth ?? null, notes ?? null]
-  );
-  revalidatePath("/admin/rent");
-  revalidatePath("/admin/rent/settings");
-  revalidatePath("/admin/rent/checklist");
-  return;
-}
-
-export async function generateRentCharges(formData?: FormData) {
-  await requireAdminSession();
-  const requestedUnitId = formData ? text(formData.get("unitId")) : "";
-  const data = await getAppData();
-  const assignedUnitIds = new Set(data.rentAccountUnits.map((link) => link.unitId));
-  const settings = data.rentSettings.filter((setting) => setting.enabled && setting.amountPence > 0 && !assignedUnitIds.has(setting.unitId) && (!requestedUnitId || setting.unitId === requestedUnitId));
-  const activeAccounts = data.rentAccounts.filter((account) => account.enabled && account.amountPence > 0);
-  let created = 0;
-  let generatedUnits = settings.length;
-
-  const accountChargeInputs = activeAccounts.flatMap((account) => {
-    const linkedUnitIds = data.rentAccountUnits.filter((link) => link.rentAccountId === account.id).map((link) => link.unitId);
-    const primaryUnitId = linkedUnitIds[0];
-    if (!primaryUnitId || (requestedUnitId && !linkedUnitIds.includes(requestedUnitId))) return [];
-    const activeServices = data.rentServices.filter((service) => service.rentAccountId === account.id && service.status === "active");
-    const amountPence = account.amountPence + activeServices.reduce((sum, service) => sum + service.amountPence, 0);
-    return [{ account, primaryUnitId, amountPence, serviceCount: activeServices.length }];
-  });
-  generatedUnits += accountChargeInputs.length;
-
-  if (!hasDatabaseUrl()) {
-    for (const input of accountChargeInputs) {
-      const existing = new Set(data.rentCharges.filter((charge) => charge.unitId === input.primaryUnitId).map((charge) => charge.dueDate));
-      const dueDates = getRentDueDates({ ...input.account, amountPence: input.amountPence }).filter((dueDate) => !existing.has(dueDate));
-      addDemoRentCharges({ unitId: input.primaryUnitId, dueDates, amountPence: input.amountPence, notes: `Rent account: ${input.account.name}${input.serviceCount ? ` including ${input.serviceCount} service(s)` : ""}` });
-      created += dueDates.length;
-    }
-    for (const setting of settings) {
-      const existing = new Set(data.rentCharges.filter((charge) => charge.unitId === setting.unitId).map((charge) => charge.dueDate));
-      const dueDates = getRentDueDates(setting).filter((dueDate) => !existing.has(dueDate));
-      addDemoRentCharges({ unitId: setting.unitId, dueDates, amountPence: setting.amountPence });
-      created += dueDates.length;
-    }
-    revalidatePath("/admin/rent");
-    revalidatePath("/admin/rent/checklist");
-    redirect(`/admin/rent?rentGenerated=${created}&rentUnits=${generatedUnits}`);
-  }
-
-  await ensureSeeded();
-  for (const input of accountChargeInputs) {
-    const existing = new Set(data.rentCharges.filter((charge) => charge.unitId === input.primaryUnitId).map((charge) => charge.dueDate));
-    const dueDates = getRentDueDates({ ...input.account, amountPence: input.amountPence }).filter((dueDate) => !existing.has(dueDate));
-    for (const dueDate of dueDates) {
-      const result = await query(
-        `insert ignore into rent_charges (id, unit_id, due_date, amount_pence, status, notes)
-         values (?,?,?,?, 'due', ?)`,
-        [randomUUID(), input.primaryUnitId, dueDate, input.amountPence, `Rent account: ${input.account.name}${input.serviceCount ? ` including ${input.serviceCount} service(s)` : ""}`]
-      );
-      created += result.affectedRows ?? 0;
-    }
-  }
-  for (const setting of settings) {
-    const existing = new Set(data.rentCharges.filter((charge) => charge.unitId === setting.unitId).map((charge) => charge.dueDate));
-    const dueDates = getRentDueDates(setting).filter((dueDate) => !existing.has(dueDate));
-    for (const dueDate of dueDates) {
-      const result = await query(
-        `insert ignore into rent_charges (id, unit_id, due_date, amount_pence, status, notes)
-         values (?,?,?,?, 'due', ?)`,
-        [randomUUID(), setting.unitId, dueDate, setting.amountPence, setting.frequency === "calendar_month" ? "Calendar monthly rent" : "Weekly Monday rent"]
-      );
-      created += result.affectedRows ?? 0;
-    }
-  }
-  revalidatePath("/admin/rent");
-  revalidatePath("/admin/rent/checklist");
-  redirect(`/admin/rent?rentGenerated=${created}&rentUnits=${generatedUnits}`);
-}
-export async function saveRentPayment(formData: FormData) {
-  const session = await requireAdminSession();
-  const unitId = text(formData.get("unitId"));
-  const amountPence = pence(formData.get("amount")) ?? 0;
-  const methodRaw = text(formData.get("paymentMethod")).toLowerCase().replaceAll(" ", "_");
-  const paymentMethod: PaymentMethod = methodRaw === "cash" || methodRaw === "bank_transfer" || methodRaw === "card" ? methodRaw : "other";
-  const paymentDate = text(formData.get("paymentDate")) || new Date().toISOString().slice(0, 10);
-  const notes = text(formData.get("notes")) || undefined;
-
-  if (!unitId) return;
-  if (amountPence <= 0) return;
-
-  if (!hasDatabaseUrl()) {
-    saveDemoRentPayment({ unitId, amountPence, paymentMethod, paymentDate, notes });
-    revalidatePath("/admin/rent");
-    revalidatePath("/admin/rent/checklist");
-    revalidatePath("/admin/rent/payments");
-    return;
-  }
-
-  await ensureSeeded();
-  await query(
-    `insert into rent_payments (id, unit_id, amount_pence, payment_method, payment_date, notes, recorded_by)
-     values (?,?,?,?,?,?,?)`,
-    [randomUUID(), unitId, amountPence, paymentMethod, paymentDate, notes ?? null, session.userId]
-  );
-  revalidatePath("/admin/rent");
-  revalidatePath("/admin/rent/checklist");
-  revalidatePath("/admin/rent/payments");
-  return;
-}
-export async function saveRentAccount(formData: FormData) {
-  await requireAdminSession();
-  const accountId = text(formData.get("accountId"));
-  const name = text(formData.get("name"));
-  const contactName = text(formData.get("contactName"));
-  const email = text(formData.get("email"));
-  const mobile = text(formData.get("mobile"));
-  const enabled = bool(formData.get("enabled"));
-  const frequency = normaliseRentFrequency(text(formData.get("frequency")) || "calendar_month");
-  const amountPence = pence(formData.get("amount")) ?? 0;
-  const openingBalancePence = pence(formData.get("openingBalance")) ?? 0;
-  const startDate = text(formData.get("startDate")) || new Date().toISOString().slice(0, 10);
-  const dueDayValue = Number(text(formData.get("dueDayOfMonth")) || "1");
-  const dueDayOfMonth = frequency === "calendar_month" ? Math.min(28, Math.max(1, dueDayValue)) : undefined;
-  const notes = text(formData.get("notes")) || undefined;
-  const unitIds = formData.getAll("unitIds").map((value) => text(value)).filter(Boolean);
-  if (!name) return;
-
-  if (!hasDatabaseUrl()) {
-    saveDemoRentAccount({ id: accountId || undefined, name, contactName, email, mobile, enabled, frequency, amountPence, openingBalancePence, startDate, dueDayOfMonth, notes, unitIds });
-    revalidatePath("/admin/rent");
-    revalidatePath("/admin/rent/accounts");
-    revalidatePath("/admin/rent/checklist");
-    return;
-  }
-
-  await ensureSeeded();
-  const id = accountId || randomUUID();
-  await query(
-    `insert into rent_accounts (id, name, contact_name, email, mobile, enabled, frequency, amount_pence, opening_balance_pence, start_date, due_day_of_month, notes)
-     values (?,?,?,?,?,?,?,?,?,?,?,?)
-     on duplicate key update name=values(name), contact_name=values(contact_name), email=values(email), mobile=values(mobile), enabled=values(enabled), frequency=values(frequency), amount_pence=values(amount_pence), opening_balance_pence=values(opening_balance_pence), start_date=values(start_date), due_day_of_month=values(due_day_of_month), notes=values(notes), updated_at=utc_timestamp()`,
-    [id, name, contactName || null, email || null, mobile || null, enabled, frequency, amountPence, openingBalancePence, startDate, dueDayOfMonth ?? null, notes ?? null]
-  );
-  for (const unitId of unitIds) {
-    await query(
-      `insert ignore into rent_account_units (id, rent_account_id, unit_id) values (?,?,?)`,
-      [randomUUID(), id, unitId]
-    );
-  }
-  revalidatePath("/admin/rent");
-  revalidatePath("/admin/rent/accounts");
-  revalidatePath("/admin/rent/checklist");
-}
-
-export async function saveRentService(formData: FormData) {
-  await requireAdminSession();
-  const serviceId = text(formData.get("serviceId"));
-  const rentAccountId = text(formData.get("rentAccountId"));
-  const name = text(formData.get("name"));
-  const rawType = text(formData.get("serviceType"));
-  const serviceType: RentServiceType = rawType === "parking_bay" || rawType === "storage" || rawType === "other" ? rawType : "service";
-  const amountPence = pence(formData.get("amount")) ?? 0;
-  const frequency = normaliseRentFrequency(text(formData.get("frequency")) || "calendar_month");
-  const status = text(formData.get("status")) === "inactive" ? "inactive" : "active";
-  const startDate = text(formData.get("startDate")) || new Date().toISOString().slice(0, 10);
-  const dueDayValue = Number(text(formData.get("dueDayOfMonth")) || "1");
-  const dueDayOfMonth = frequency === "calendar_month" ? Math.min(28, Math.max(1, dueDayValue)) : undefined;
-  const notes = text(formData.get("notes")) || undefined;
-  if (!rentAccountId || !name) return;
-
-  if (!hasDatabaseUrl()) {
-    saveDemoRentService({ id: serviceId || undefined, rentAccountId, name, serviceType, amountPence, frequency, status, startDate, dueDayOfMonth, notes });
-    revalidatePath("/admin/rent");
-    revalidatePath("/admin/rent/services");
-    revalidatePath("/admin/rent/checklist");
-    return;
-  }
-
-  await ensureSeeded();
-  await query(
-    `insert into rent_services (id, rent_account_id, name, service_type, amount_pence, frequency, status, start_date, due_day_of_month, notes)
-     values (?,?,?,?,?,?,?,?,?,?)
-     on duplicate key update rent_account_id=values(rent_account_id), name=values(name), service_type=values(service_type), amount_pence=values(amount_pence), frequency=values(frequency), status=values(status), start_date=values(start_date), due_day_of_month=values(due_day_of_month), notes=values(notes), updated_at=utc_timestamp()`,
-    [serviceId || randomUUID(), rentAccountId, name, serviceType, amountPence, frequency, status, startDate, dueDayOfMonth ?? null, notes ?? null]
-  );
-  revalidatePath("/admin/rent");
-  revalidatePath("/admin/rent/services");
-  revalidatePath("/admin/rent/checklist");
-}
+// Legacy unit-based rent writers are closed. All new rent activity is account-owned.
+export async function saveRentSetting(_formData: FormData) { await requireAdminSession(); throw new Error("Use account schedules under Rent Accounts."); }
+export async function generateRentCharges(_formData?: FormData) { await requireAdminSession(); throw new Error("Rent now updates automatically after account reconciliation and sign-off."); }
+export async function saveRentPayment(_formData: FormData) { await requireAdminSession(); throw new Error("Use Record payment on the rent account."); }
+export async function saveRentAccount(_formData: FormData) { await requireAdminSession(); throw new Error("Use the account ledger settings."); }
+export async function saveRentService(_formData: FormData) { await requireAdminSession(); throw new Error("Use service schedules on the rent account."); }

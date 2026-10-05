@@ -1,46 +1,12 @@
-import { PageHeader, PrimaryButton, SecondaryButton, StatCard, StatusPill, DataTable, Th, Td } from "@/components/ui";
-import { generateRentCharges } from "@/lib/actions";
-import { getAppData } from "@/lib/data";
-import { buildRentAccountLedger, rentFrequencyLabel, rentStatusLabel, rentStatusTone } from "@/lib/rent";
-import { formatAccountBalance, formatMoney } from "@/lib/money";
-import { CalendarClock, HandCoins, Landmark, TrendingUp, Users } from "lucide-react";
-
+import Link from "next/link";
+import { PageHeader } from "@/components/ui";
+import { AccountsTable, button, card } from "@/components/rent-ledger/views";
+import { getLedgerAccounts } from "@/lib/rent-ledger/store";
+import { balances, chargesWithProjections, today } from "@/lib/rent-ledger/engine";
+import { formatMoney } from "@/lib/money";
 export const dynamic = "force-dynamic";
-
-export default async function RentDashboardPage({ searchParams }: { searchParams?: { rentGenerated?: string; rentUnits?: string } }) {
-  const { units, rentSettings, rentCharges, rentPayments, rentAccounts, rentAccountUnits, rentServices } = await getAppData();
-  const ledger = buildRentAccountLedger(units, rentSettings, rentCharges, rentPayments, rentAccounts, rentAccountUnits, rentServices);
-  const configured = ledger.filter((row) => row.enabled);
-  const openingArrears = ledger.reduce((sum, row) => sum + Math.max(0, row.openingBalancePence), 0);
-  const outstanding = ledger.reduce((sum, row) => sum + Math.max(0, row.balancePence), 0);
-  const credit = ledger.reduce((sum, row) => sum + Math.max(0, -row.balancePence), 0);
-  const paid = rentPayments.filter((payment) => !payment.reversedAt).reduce((sum, payment) => sum + payment.amountPence, 0);
-  const generatedCount = Number(searchParams?.rentGenerated ?? "");
-  const generatedUnits = Number(searchParams?.rentUnits ?? "");
-  const generationMessage = Number.isFinite(generatedCount)
-    ? generatedCount > 0
-      ? `${generatedCount} rent due ${generatedCount === 1 ? "entry has" : "entries have"} been generated.`
-      : generatedUnits > 0
-        ? "No new rent was generated. The due entries already exist, or the next due date has not arrived yet."
-        : "No rent was generated because no units have rent tracking enabled with an amount."
-    : undefined;
-
-  return <>
-    <PageHeader title="Rent Dashboard" eyebrow="Rent Management" action={<form action={generateRentCharges}><PrimaryButton><CalendarClock className="h-5 w-5" />Generate rent due</PrimaryButton></form>} />
-    {generationMessage ? <section className={`mb-5 rounded-2xl border p-4 text-sm font-black shadow-soft ${generatedCount > 0 ? "border-estate-500/30 bg-estate-500/10 text-estate-100" : "border-amber-500/30 bg-amber-500/10 text-amber-100"}`}>{generationMessage}</section> : null}
-    <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-      <StatCard label="Tracked units" value={`${configured.length} / ${ledger.length}`} hint="Units with rent enabled" icon={Users} tone="green" href="/admin/rent/settings" />
-      <StatCard label="Outstanding rent" value={formatMoney(outstanding)} hint="Opening arrears plus generated rent" icon={TrendingUp} tone="danger" href="/admin/rent/arrears" />
-      <StatCard label="Rent paid" value={formatMoney(paid)} hint="All recorded rent payments" icon={HandCoins} tone="green" href="/admin/rent/payments" />
-      <StatCard label="Account credit" value={formatMoney(credit)} hint="Paid ahead" icon={Landmark} tone="blue" />
-      <StatCard label="Opening arrears" value={formatMoney(openingArrears)} hint="Brought forward from existing books" icon={CalendarClock} tone="warning" href="/admin/rent/settings" />
-    </section>
-    <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <PrimaryButton href="/admin/rent/checklist"><HandCoins className="h-5 w-5" />Rent Checklist</PrimaryButton>
-      <SecondaryButton href="/admin/rent/settings">Unit Rent Settings</SecondaryButton>
-      <SecondaryButton href="/admin/rent/payments">Rent Payments</SecondaryButton>
-      <SecondaryButton href="/admin/rent/arrears">Arrears</SecondaryButton>
-    </section>
-    <DataTable><thead><tr><Th>Unit(s)</Th><Th>Tenant / account</Th><Th>Rent rule</Th><Th>Opening</Th><Th>Due / credit</Th><Th>Next due</Th><Th>Status</Th></tr></thead><tbody>{ledger.slice(0, 12).map((row) => <tr key={row.memberUnitIds.join("-")}><Td strong>{row.unitReferences}</Td><Td>{row.tenantName}</Td><Td>{row.enabled ? `${formatMoney(row.weeklyOrMonthlyRentPence)} ${rentFrequencyLabel(row.frequency)}` : "Not configured"}</Td><Td>{formatAccountBalance(row.openingBalancePence)}</Td><Td strong>{formatAccountBalance(row.balancePence)}</Td><Td>{row.nextDueDate}</Td><Td><StatusPill tone={rentStatusTone(row.status)}>{rentStatusLabel(row.status)}</StatusPill></Td></tr>)}</tbody></DataTable>
-  </>;
+export default async function RentDashboard() {
+  const accounts = await getLedgerAccounts(); const active = accounts.filter(a => a.state !== "review");
+  const totals = active.map(a => balances(a, today(), chargesWithProjections(a)));
+  return <div className="space-y-5"><PageHeader title="Rent accounts" eyebrow="Rent Management" action={<Link className={button} href="/admin/rent/accounts">Manage accounts</Link>} /><p>Approved accounts update automatically. Accounts awaiting reconciliation do not generate charges.</p>{accounts.some(a => a.state === "review") && <div className={`${card} border-amber-500/40`}><b>{accounts.filter(a => a.state === "review").length} accounts need opening balances and administrator sign-off.</b><p>Enter the amount owed or credit brought forward, then the agreed rate starting today. Preview each account before activation.</p></div>}<div className="grid gap-3 md:grid-cols-4">{([['Current outstanding','outstanding'],['Unpaid overdue charges','overdue'],['Upcoming · 90 days','upcoming'],['Unallocated credit','credit']] as const).map(([label, key]) => <div className={card} key={key}><p>{label}</p><strong className="text-2xl">{formatMoney(totals.reduce((n, b) => n + b[key], 0))}</strong></div>)}</div><AccountsTable accounts={accounts} /><p className="text-sm text-mutedText">Rent and services belong to the account. Electricity retains its separate unit balances. Credit is not automatically allocated to overdue charges.</p></div>;
 }

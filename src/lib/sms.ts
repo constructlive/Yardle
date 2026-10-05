@@ -4,7 +4,7 @@ import type { Bill, BillingPeriod, SmsLog, Unit } from "./types";
 
 export interface SmsProvider {
   name: string;
-  send(input: { mobile: string; message: string }): Promise<SmsSendResult>;
+  send(input: { mobile: string; message: string; statusCallback?: string }): Promise<SmsSendResult>;
 }
 
 export interface SmsSendResult {
@@ -29,7 +29,7 @@ export class MockSmsProvider implements SmsProvider {
 export class TwilioSmsProvider implements SmsProvider {
   name = "twilio";
 
-  async send(input: { mobile: string; message: string }): Promise<SmsSendResult> {
+  async send(input: { mobile: string; message: string; statusCallback?: string }): Promise<SmsSendResult> {
     const configError = validateTwilioConfig();
     if (configError) {
       return {
@@ -58,7 +58,8 @@ export class TwilioSmsProvider implements SmsProvider {
       const message = await client.messages.create({
         to: recipient,
         from: process.env.TWILIO_FROM!,
-        body: input.message
+        body: input.message,
+        ...(input.statusCallback ? { statusCallback: input.statusCallback } : {})
       });
 
       return {

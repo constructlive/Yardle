@@ -28,7 +28,6 @@ const rentLinks: NavLink[] = [
   ["Rent Checklist", "/admin/rent/checklist", HandCoins, "Checklist"],
   ["Rent Accounts", "/admin/rent/accounts", Users, "Accounts"],
   ["Services", "/admin/rent/services", Landmark, "Services"],
-  ["Unit Rent Settings", "/admin/rent/settings", Building2, "Settings"],
   ["Rent Payments", "/admin/rent/payments", WalletCards, "Payments"],
   ["Arrears", "/admin/rent/arrears", CalendarClock, "Arrears"],
   ["SMS", "/admin/sms", MessageSquare, "SMS"],
