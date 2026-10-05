@@ -1,3 +1,4 @@
+import "./portal.css";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { PrivatePageLifecycle } from "@/components/tenant-portal/private-page";
