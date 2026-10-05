@@ -1,3 +1,4 @@
+import { tenantGroupId } from "@/lib/rent-ledger/unit-accounts";
 import { UnitAssignment } from "@/components/rent-ledger/unit-assignment";
 import { CalendarReconciliationForm } from "@/components/rent-ledger/reconciliation-form";
 import { PortalAccessPanel } from "@/components/tenant-portal/access-panel";
@@ -37,6 +38,8 @@ export default async function AccountPage({ params, searchParams }: { params: { 
   const accounts = await getLedgerAccounts(); const a = findRouteAccount(accounts, params.accountId); if (!a) notFound();
   const data = await getAppData(); const linked = data.units.filter(u => a.unitIds.includes(u.id));
   return <div className="space-y-6"><PageHeader title={a.name} eyebrow={`Rent account · ${a.state}`} action={a.state !== "review" ? <Link className={button} href={`${accountPath(a.id)}/payment`}>Record payment / apply credit</Link> : undefined} />
+    <p><Link className="text-amber-200 underline" href="/admin/rent/accounts">← Tenant list and separate unit rent accounts</Link></p>
+    {accounts.filter(other=>other.id!==a.id&&tenantGroupId(other)===tenantGroupId(a)).length>0&&<section className={card}><h2 className="font-bold">Other rent accounts for this tenant</h2><p className="text-sm">Each account has its own balance and payment allocations. Payments here do not settle another unit’s rent.</p>{accounts.filter(other=>other.id!==a.id&&tenantGroupId(other)===tenantGroupId(a)).map(other=><p key={other.id}><Link className="underline" href={accountPath(other.id)}>{other.unitIds.map(id=>"Unit "+(data.units.find(u=>u.id===id)?.unitReference||"unknown")).join(" + ")||other.name}</Link></p>)}</section>}
     <p>Units: {linked.map(u => u.unitReference).join(", ") || "No units attached (standalone account)"}</p>
     {a.state !== "review" && <BalanceCards account={a} />}
     <ActionForm action={saveAccountDetails} className={card}><AccountFields account={a} /><h2 className="text-xl font-black">Account contact</h2><div className="grid gap-3 md:grid-cols-2">{([['name','Account name'],['contactName','Contact name'],['mobile','Mobile for receipts'],['email','Email']] as const).map(([name,label]) => <label key={name}>{label}<input className={field} name={name} defaultValue={a[name]} required={name === "name"} /></label>)}</div><button className={button}>Save account contact</button></ActionForm>

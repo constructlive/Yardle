@@ -27,3 +27,7 @@ export async function addManualCharge(...args: Parameters<typeof ledger.addManua
 export async function enablePortal(...args: Parameters<typeof ledger.enablePortal>) { return safely(() => ledger.enablePortal(...args)); }
 export async function previewCredit(...args: Parameters<typeof ledger.previewCredit>) { return safely(() => ledger.previewCredit(...args)); }
 export async function allocateCredit(...args: Parameters<typeof ledger.allocateCredit>) { return safely(() => ledger.allocateCredit(...args)); }
+
+export async function createUnitRent(...args: Parameters<typeof ledger.createUnitRent>) { return safely(() => ledger.createUnitRent(...args)); }
+
+export async function linkExistingRentAccount(...args: Parameters<typeof ledger.linkExistingRentAccount>) { return safely(() => ledger.linkExistingRentAccount(...args)); }

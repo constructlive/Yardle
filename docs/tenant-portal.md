@@ -54,3 +54,11 @@ Browser verification uses an isolated in-memory demo with database and real SMS 
 Rent → Accounts now starts with a tenant-name list. Add a tenant by name, expand **Assign units**, select their units and save. Contact details are optional. Open their rent account to enter rates and reconcile balances. Unit assignment never moves rent transactions or automatically approves electricity history.
 
 New imported drafts retain source unit records in their archive but have no assigned units. On upgrade, a one-time transaction releases inferred unit links only on imported review accounts with no financial entries, approval, explicit unit-assignment audit or enabled/confirmed portal access. The before/after assignment is audited. Activated accounts and confirmed relationships remain intact. To correct those, use **Change assigned units** yourself; changing membership revokes portal entry links and requires fresh approval.
+
+## Separate balances for one tenant
+
+For a tenant such as Meadspeed with Unit 2/3 and Unit 7, use **Set up rent for a unit** twice. Enter the individual amount, frequency and start date for each. Each unit gets an independent account with its own charges, allocations, payments, arrears, credit and calendar. The first empty draft can be reused; existing archive material and replaced draft schedules are retained in the audit history. Opening balances still require explicit reconciliation; zero is never assumed by activation.
+
+If both unit accounts already exist, expand **Link an existing rent account** on the tenant’s row and explicitly select the other account. This is an administrative grouping only, with an audit on both accounts. It does not merge balances or grant access to another account’s portal. Private links remain scoped to their original account.
+
+Unused combined drafts can be separated only after explicit confirmation. Confirmed accounts or accounts with financial entries cannot be split using this shortcut; their allocations and balances must be reviewed first. Existing confirmed accounts can still have additional independent accounts created for unassigned units. The two balances are shown separately in the tenant list.

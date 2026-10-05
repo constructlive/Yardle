@@ -30,6 +30,8 @@ export type TenantQuery = {
   adminReadCount: number; tenantReadCount: number;
 };
 export type LedgerAccount = {
+  /** Administrative tenant grouping only; does not grant access to another account. */
+  tenantGroupId?: string;
   id: string; name: string; contactName: string; mobile: string; email: string; unitIds: string[];
   schedules: Schedule[]; charges: Charge[]; payments: Receipt[]; adjustments: Adjustment[]; audit: AuditEvent[];
   version: number; state: "review" | "active" | "paused";

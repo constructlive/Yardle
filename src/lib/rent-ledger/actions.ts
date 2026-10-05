@@ -7,7 +7,7 @@ import { requireAdminSession } from "../session";
 import { getSmsProvider } from "../sms";
 import { getActiveSmsProviderName } from "../sms-logging";
 import { addDays, assertSchedule, balances, chargesWithProjections, coveredByAllocation, date, money, paymentMessage, previewPayment, projectCharges, today, validatePayment } from "./engine";
-import { audit, catchUpAccount, createAccount, getLedgerAccounts, mutateAccount, readAccounts, setUnitMembership } from "./store";
+import { audit, catchUpAccount, createAccount, getLedgerAccounts, mutateAccount, readAccounts, setUnitMembership, setUpUnitRentAccount, groupExistingRentAccount } from "./store";
 import type { LedgerAccount, PaymentInput, Receipt, Schedule } from "./types";
 
 function refresh() { revalidatePath("/admin/rent", "layout"); }
@@ -200,4 +200,24 @@ export async function allocateCredit(input: PaymentInput, paymentId: string) {
     if (a.version !== input.version) throw new RentError("Account changed; refresh and preview again.");
     applyCredit(a, input, paymentId); audit(a, user.userId, "credit_allocated", { requestId: input.requestId, paymentId, allocations: input.allocations });
   }); refresh();
+}
+
+export async function createUnitRent(f: FormData) {
+  const user=await requireAdminSession();
+  const {getAppData}=await import("../data");const data=await getAppData();
+  const unit=data.units.find(u=>u.id===value(f,"unitId"));if(!unit)throw new RentError("Choose a unit.");
+  const requestId=value(f,"requestId"),startDate=value(f,"startDate"),frequency=value(f,"frequency");
+  if(frequency!=="weekly"&&frequency!=="monthly")throw new RentError("Choose weekly or monthly rent.");
+  const start=date(startDate);
+  const schedule:Schedule={id:requestId,name:"Rent — Unit "+unit.unitReference,kind:"rent",frequency,startDate,dueDay:frequency==="weekly"?start.getUTCDay():start.getUTCDate(),timing:"advance",partialRule:"daily",enabled:true,rates:[{effectiveDate:startDate,amountPence:money(value(f,"amount"))}]};
+  await setUpUnitRentAccount({parentId:value(f,"parentId"),version:version(f),requestId,unitId:unit.id,unitReference:unit.unitReference,sourceVersion:f.has("sourceVersion")?Number(value(f,"sourceVersion")):undefined,confirmMove:f.get("confirmMove")==="on",schedule},user.userId);
+  refresh();
+}
+
+export async function linkExistingRentAccount(f:FormData){
+  const user=await requireAdminSession();
+  if(f.get("confirmed")!=="on")throw new RentError("Confirm these rent accounts belong to the same tenant.");
+  let selected:unknown;try{selected=JSON.parse(value(f,"accountToLink"));}catch{throw new RentError("Choose a rent account to link.");}
+  if(!Array.isArray(selected)||selected.length!==2||typeof selected[0]!=="string"||!Number.isInteger(selected[1]))throw new RentError("Choose a valid rent account.");
+  await groupExistingRentAccount(value(f,"parentId"),version(f),selected[0],selected[1],user.userId);refresh();
 }

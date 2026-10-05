@@ -1,3 +1,4 @@
+import { prepareRentAccountGrouping, prepareUnitRentAccount, type UnitRentInput } from "./unit-accounts";
 import { RentError } from "./errors";
 import { randomUUID } from "node:crypto";
 import { ensureSeeded, hasDatabaseUrl, query, transaction } from "../db";
@@ -140,5 +141,48 @@ export async function setUnitMembership(id: string, unitIds: string[], expectedV
     const a = apply(rows.rows.map(r => JSON.parse(r.state_json))); const event = a.audit.at(-1)!;
     await client.query("update rent_ledger_accounts set version=?,state_json=? where id=?", [a.version, JSON.stringify(a), id]);
     await client.query("insert into rent_ledger_events (id,account_id,actor,event_type,detail_json) values (?,?,?,?,?)", [event.id, id, event.actor, event.type, JSON.stringify(event)]);
+  });
+}
+
+/** Serialises account creation and unit ownership against all other assignment changes. */
+export async function setUpUnitRentAccount(input: UnitRentInput, actor: string) {
+  await initializeLedger();
+  if (!hasDatabaseUrl()) {
+    let release!: () => void; const previous=state.serial;state.serial=new Promise<void>(r=>{release=r;});await previous;
+    try {
+      const result=prepareUnitRentAccount([...memory.values()].map(a=>structuredClone(a)),input,actor);
+      for(const a of result.changed)memory.set(a.id,a);
+      return result.accountId;
+    } finally {release();}
+  }
+  return transaction(async client=>{
+    await client.query("select id from rent_ledger_meta where id='migration-v1' for update");
+    const rows=await client.query<{state_json:string}>("select state_json from rent_ledger_accounts order by id for update");
+    const accounts=rows.rows.map(r=>JSON.parse(r.state_json) as LedgerAccount);
+    const before=new Map(accounts.map(a=>[a.id,a.audit.length]));
+    const result=prepareUnitRentAccount(accounts,input,actor);
+    for(const account of result.changed){
+      if(before.has(account.id))await client.query("update rent_ledger_accounts set version=?,state_json=? where id=?",[account.version,JSON.stringify(account),account.id]);
+      else await client.query("insert into rent_ledger_accounts (id,version,state_json) values (?,?,?)",[account.id,account.version,JSON.stringify(account)]);
+      for(const event of account.audit.slice(before.get(account.id)||0))await client.query("insert into rent_ledger_events (id,account_id,actor,event_type,detail_json) values (?,?,?,?,?)",[event.id,account.id,event.actor,event.type,JSON.stringify(event)]);
+    }
+    return result.accountId;
+  });
+}
+
+export async function groupExistingRentAccount(parentId:string,parentVersion:number,sourceId:string,sourceVersion:number,actor:string){
+  await initializeLedger();
+  if(!hasDatabaseUrl()){
+    let release!:()=>void;const previous=state.serial;state.serial=new Promise<void>(r=>{release=r;});await previous;
+    try{const changed=prepareRentAccountGrouping([...memory.values()].map(a=>structuredClone(a)),parentId,parentVersion,sourceId,sourceVersion,actor);for(const a of changed)memory.set(a.id,a);}finally{release();}return;
+  }
+  await transaction(async client=>{
+    await client.query("select id from rent_ledger_meta where id='migration-v1' for update");
+    const rows=await client.query<{state_json:string}>("select state_json from rent_ledger_accounts order by id for update");
+    const changed=prepareRentAccountGrouping(rows.rows.map(r=>JSON.parse(r.state_json)),parentId,parentVersion,sourceId,sourceVersion,actor);
+    for(const account of changed){
+      await client.query("update rent_ledger_accounts set version=?,state_json=? where id=?",[account.version,JSON.stringify(account),account.id]);
+      const event=account.audit.at(-1)!;await client.query("insert into rent_ledger_events (id,account_id,actor,event_type,detail_json) values (?,?,?,?,?)",[event.id,account.id,event.actor,event.type,JSON.stringify(event)]);
+    }
   });
 }
