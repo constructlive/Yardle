@@ -1,3 +1,4 @@
+import { previewCalendarReconciliation, saveCalendarReconciliation } from "./reconcile-actions";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("../session", () => ({ requireAdminSession: async () => ({ userId: "test-admin", role: "admin" }) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -141,5 +142,33 @@ describe("removing rent accounts", () => {
     expect(remaining.tenantGroupId).toBeUndefined();
     expect(remaining.audit.at(-1)?.type).toBe("tenant_group_removed");
     expect(remaining.schedules).toEqual(child.schedules);
+  });
+});
+
+
+describe("reconciliation preview and save actions",()=>{
+  const setup=(a:LedgerAccount):import("./reconciliation").ReconcileInput=>({accountId:a.id,version:a.version,requestId:randomUUID(),first:"",calculationFrom:"",lastPaymentDate:"",lastPaymentAmount:"",paidThrough:"",coverageFrom:"",opening:"",reason:"",setupMode:"calculator",frequency:"weekly",firstUnpaid:"2026-09-14",previousRent:"65",newRent:"70",effectiveDate:"2026-10-05",calculationDate:"2026-10-05"});
+  it("previews without writes then saves the exact total once, including concurrent retries",async()=>{
+    const a=await draft(),i=setup(a);const preview=await previewCalendarReconciliation(i);
+    expect(preview.ok).toBe(true);if(!preview.ok)return;
+    expect(preview.value.balances.net).toBe(26500);expect((await current(a.id)).charges).toHaveLength(0);
+    expect((await saveCalendarReconciliation(i)).ok).toBe(false);
+    const results=await Promise.all([saveCalendarReconciliation({...i,confirmed:true}),saveCalendarReconciliation({...i,confirmed:true})]);expect(results.every(r=>r.ok)).toBe(true);
+    const saved=await current(a.id);expect(saved.charges).toHaveLength(4);expect(saved.adjustments).toHaveLength(0);expect(saved.payments).toHaveLength(0);expect(balances(saved).net).toBe(26500);
+    expect((await saveCalendarReconciliation({...i,confirmed:true,newRent:"75"})).ok).toBe(false);
+    expect(await current(a.id)).toEqual(saved);
+  });
+  it("accepts manual opening and blank optional dates in both actions",async()=>{
+    const a=await draft(),i={...setup(a),setupMode:"manual" as const,firstUnpaid:"",previousRent:"",opening:"195",reason:"Confirmed book balance"};
+    const preview=await previewCalendarReconciliation(i);expect(preview.ok).toBe(true);
+    expect((await saveCalendarReconciliation({...i,confirmed:true})).ok).toBe(true);
+    expect(balances(await current(a.id)).net).toBe(26500);
+  });
+  it("returns field-specific backend validation and cannot save an unexplained override",async()=>{
+    const a=await draft(),i=setup(a);
+    expect(await previewCalendarReconciliation({...i,firstUnpaid:"2026-09-15"})).toMatchObject({ok:false,fieldErrors:{firstUnpaid:expect.stringContaining("Monday")}});
+    const override={...i,opening:"100"};expect((await previewCalendarReconciliation(override)).ok).toBe(true);
+    expect(await saveCalendarReconciliation({...override,confirmed:true})).toMatchObject({ok:false,fieldErrors:{reason:expect.stringContaining("reason")}});
+    expect((await current(a.id)).state).toBe("review");
   });
 });
