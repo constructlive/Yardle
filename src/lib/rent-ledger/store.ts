@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { ensureSeeded, hasDatabaseUrl, query, transaction } from "../db";
 import { getAppData } from "../data";
 import { migrationDrafts } from "./migrate";
+import { releaseUnconfirmedUnits } from "./manual-units";
 import { projectCharges, today } from "./engine";
 import type { LedgerAccount } from "./types";
 
@@ -18,6 +19,23 @@ const globalState = globalThis as typeof globalThis & { yardleRentLedgerRuntime?
 const state: Runtime = globalState.yardleRentLedgerRuntime ??= { memory: new Map<string, LedgerAccount>(), initialized: false, serial: Promise.resolve() };
 const memory = state.memory;
 export function audit(account: LedgerAccount, actor: string, type: string, detail: unknown) { account.audit.push({ id: randomUUID(), at: new Date().toISOString(), actor, type, detail }); }
+async function migrateManualUnitAssignments() {
+  await transaction(async client => {
+    const claimed = await client.query("insert ignore into rent_ledger_meta (id,value_json) values ('manual-unit-assignment-v1',?)", [JSON.stringify({ at: new Date().toISOString() })]);
+    if (!claimed.affectedRows) return;
+    const rows = await client.query<{ state_json: string }>("select state_json from rent_ledger_accounts order by id for update");
+    for (const row of rows.rows) {
+      const account: LedgerAccount = JSON.parse(row.state_json);
+      const before = releaseUnconfirmedUnits(account);
+      if (!before.length) continue;
+      account.version++;
+      audit(account, "migration", "inferred_unit_links_released", { before, after: [], reason: "Administrator will assign units manually. Original records remain in the migration archive." });
+      const event = account.audit.at(-1)!;
+      await client.query("update rent_ledger_accounts set version=?,state_json=? where id=?", [account.version, JSON.stringify(account), account.id]);
+      await client.query("insert into rent_ledger_events (id,account_id,actor,event_type,detail_json) values (?,?,?,?,?)", [event.id, account.id, event.actor, event.type, JSON.stringify(event)]);
+    }
+  });
+}
 export async function initializeLedger() {
   if (state.initialized) return;
   if (state.initializing) return state.initializing;
@@ -26,7 +44,7 @@ export async function initializeLedger() {
     if (hasDatabaseUrl()) {
       for (const sql of ledgerSchema) await query(sql);
       const existing = await query("select id from rent_ledger_meta where id='migration-v1'");
-      if (existing.rows.length) { state.initialized = true; return; }
+      if (existing.rows.length) { await migrateManualUnitAssignments(); state.initialized = true; return; }
     }
     const drafts = migrationDrafts(await getAppData());
     if (!hasDatabaseUrl()) { for (const a of drafts) { audit(a, "migration", "legacy_snapshot", a.migration); memory.set(a.id, a); } }
@@ -103,7 +121,14 @@ export async function setUnitMembership(id: string, unitIds: string[], expectedV
   const apply = (accounts: LedgerAccount[]) => {
     const a = accounts.find(a => a.id === id); if (!a || a.version !== expectedVersion) throw new RentError("Account changed. Refresh and review again.");
     if (accounts.some(other => other.id !== id && other.unitIds.some(u => unitIds.includes(u)))) throw new RentError("A selected unit already belongs to another account. Remove its old link first.");
-    const before = [...a.unitIds]; a.unitIds = [...new Set(unitIds)]; a.version++; audit(a, actor, "unit_membership_changed", { before, after: a.unitIds, reason }); return a;
+    const before = [...a.unitIds]; a.unitIds = [...new Set(unitIds)];
+    const changed = before.length !== a.unitIds.length || before.some(id => !a.unitIds.includes(id));
+    if (changed) {
+      a.portalEnabled = false; delete a.portalToken; delete a.portalScope;
+      const at = new Date().toISOString();
+      for (const grant of a.portalGrants || []) if (!grant.revokedAt) grant.revokedAt = at;
+    }
+    a.version++; audit(a, actor, "unit_membership_changed", { before, after: a.unitIds, reason, portalAccessRevoked: changed }); return a;
   };
   if (!hasDatabaseUrl()) {
     let release!: () => void; const previous = state.serial; state.serial = new Promise<void>(r => { release = r; }); await previous;

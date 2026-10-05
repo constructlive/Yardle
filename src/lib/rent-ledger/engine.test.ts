@@ -86,9 +86,9 @@ describe("allocations and coverage", () => {
 });
 describe("migration", () => {
   it("archives unit history without activation, duplication or source mutation", () => {
-    const data=getDemoAppData();const original=JSON.stringify(data);const drafts=migrationDrafts(data);expect(drafts.every(a=>a.state==="review"&&!a.approval&&!a.charges.length&&!a.payments.length)).toBe(true);expect(JSON.stringify(data)).toBe(original);const combined=drafts.find(a=>a.name==="S6 Customs")!;expect(combined.unitIds).toHaveLength(3);expect((combined.migration.snapshot as {charges:unknown[]}).charges.length).toBeGreaterThan(0);
+    const data=getDemoAppData();const original=JSON.stringify(data);const drafts=migrationDrafts(data);expect(drafts.every(a=>a.state==="review"&&!a.approval&&!a.charges.length&&!a.payments.length)).toBe(true);expect(JSON.stringify(data)).toBe(original);const combined=drafts.find(a=>a.name==="S6 Customs")!;expect(combined.unitIds).toHaveLength(0);expect((combined.migration.snapshot as {units:unknown[]}).units).toHaveLength(3);expect((combined.migration.snapshot as {charges:unknown[]}).charges.length).toBeGreaterThan(0);
   });
   it("consolidates case-insensitive note grouping and preserves opening evidence", () => {
-    const data=structuredClone(getDemoAppData());data.rentAccounts=[];data.rentAccountUnits=[];data.rentServices=[];data.rentSettings[0].notes='yardle_rent_meta:{"combinedAccount":"Grouped Payer"}';data.rentSettings[1].notes='yardle_rent_meta:{"combinedAccount":"grouped payer"}';const a=migrationDrafts(data).find(a=>a.name==="Grouped Payer")!;expect(a.unitIds).toHaveLength(2);expect((a.migration.snapshot as {settings:unknown[]}).settings).toHaveLength(2);
+    const data=structuredClone(getDemoAppData());data.rentAccounts=[];data.rentAccountUnits=[];data.rentServices=[];data.rentSettings[0].notes='yardle_rent_meta:{"combinedAccount":"Grouped Payer"}';data.rentSettings[1].notes='yardle_rent_meta:{"combinedAccount":"grouped payer"}';const a=migrationDrafts(data).find(a=>a.name==="Grouped Payer")!;expect(a.unitIds).toHaveLength(0);expect((a.migration.snapshot as {units:unknown[]}).units).toHaveLength(2);expect((a.migration.snapshot as {settings:unknown[]}).settings).toHaveLength(2);
   });
 });

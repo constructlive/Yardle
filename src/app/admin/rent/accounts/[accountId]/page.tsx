@@ -1,3 +1,4 @@
+import { UnitAssignment } from "@/components/rent-ledger/unit-assignment";
 import { CalendarReconciliationForm } from "@/components/rent-ledger/reconciliation-form";
 import { PortalAccessPanel } from "@/components/tenant-portal/access-panel";
 import { RentCalendar } from "@/components/rent-ledger/calendar";
@@ -8,7 +9,7 @@ import { PageHeader } from "@/components/ui";
 import { LegacyHistory } from "@/components/rent-ledger/legacy-history";
 import { ActionForm, Confirmation } from "@/components/rent-ledger/forms";
 import { AccountFields, BalanceCards, ChargeTable, PaymentHistory, button, card, field } from "@/components/rent-ledger/views";
-import { addAdjustment, addManualCharge, addRate, reverseReceipt, saveAccountDetails, saveSchedule, setAccountState, saveAccountUnits } from "@/lib/rent-ledger/ui-actions";
+import { addAdjustment, addManualCharge, addRate, reverseReceipt, saveAccountDetails, saveSchedule, setAccountState } from "@/lib/rent-ledger/ui-actions";
 import { getLedgerAccounts } from "@/lib/rent-ledger/store";
 import { today } from "@/lib/rent-ledger/engine";
 import { getAppData } from "@/lib/data";
@@ -39,7 +40,7 @@ export default async function AccountPage({ params, searchParams }: { params: { 
     <p>Units: {linked.map(u => u.unitReference).join(", ") || "No units attached (standalone account)"}</p>
     {a.state !== "review" && <BalanceCards account={a} />}
     <ActionForm action={saveAccountDetails} className={card}><AccountFields account={a} /><h2 className="text-xl font-black">Account contact</h2><div className="grid gap-3 md:grid-cols-2">{([['name','Account name'],['contactName','Contact name'],['mobile','Mobile for receipts'],['email','Email']] as const).map(([name,label]) => <label key={name}>{label}<input className={field} name={name} defaultValue={a[name]} required={name === "name"} /></label>)}</div><button className={button}>Save account contact</button></ActionForm>
-    <ActionForm action={saveAccountUnits} className={card}><AccountFields account={a} /><h2 className="text-xl font-black">Attached units</h2><p>Link the units paid by this account. Transactions stay with this account when a unit is removed. Portal access includes electricity bills for linked units; check the payer before linking.</p><div className="grid gap-3 md:grid-cols-3">{data.units.map(u => { const other = accounts.find(x => x.id !== a.id && x.unitIds.includes(u.id)); return <label className="flex gap-2" key={u.id}><input name="unitIds" type="checkbox" value={u.id} defaultChecked={a.unitIds.includes(u.id)} disabled={!!other} />Unit {u.unitReference} {other ? `(${other.name})` : ""}</label>; })}</div><label>Reason / relationship confirmed<input className={field} name="reason" required /></label><button className={button}>Save unit membership</button></ActionForm>
+    <section className={card}><h2 className="text-xl font-black">Assigned units</h2><UnitAssignment account={a} accounts={accounts} units={data.units}/></section>
     <section id="schedules" className="space-y-4"><h2 className="text-2xl font-black">Rent and service schedules</h2><p>Each schedule is independent. Due dates in arrears fall the day after coverage ends. A daily partial rule splits the charge at each rate change; the full-cycle rule charges a full amount for a partial cycle, weighted across any dated rate changes.</p>{a.schedules.map(s => <div className="space-y-3" key={s.id}><ScheduleForm account={a} schedule={s} /><div className={card}><h3 className="font-bold">Dated rate history — {s.name}</h3>{[...s.rates].sort((x,y) => x.effectiveDate.localeCompare(y.effectiveDate)).map(r => <p key={r.effectiveDate}>From {r.effectiveDate}: {formatMoney(r.amountPence)} per {s.frequency === "monthly" ? "calendar month" : s.frequency === "weekly" ? "week" : "manual period"}</p>)}<ActionForm action={addRate}><AccountFields account={a} /><input type="hidden" name="sourceId" value={s.id} /><div className="grid gap-3 md:grid-cols-3"><label>New amount (£)<input className={field} name="amount" inputMode="decimal" required /></label><label>Exact effective date<input className={field} name="effectiveDate" type="date" defaultValue={today()} required /></label><button className={button}>Add dated rate</button></div></ActionForm></div></div>)}<ScheduleForm account={a} /></section>
     {a.state === "review" ? <CalendarReconciliationForm key={a.version} account={a} basePath={accountPath(a.id)}/> : <>
       <section className={card}><h2 className="text-xl font-black">Charges and upcoming calendar</h2><ChargeTable account={a} /></section>

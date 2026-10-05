@@ -7,7 +7,7 @@ vi.mock("../sms", () => ({ getSmsProvider: () => ({ send: providerSend }) }));
 vi.mock("../sms-logging", () => ({ getActiveSmsProviderName: async () => "mock", sendAndLogSms: vi.fn() }));
 import { randomUUID } from "node:crypto";
 import { addAdjustment, addRate, allocateCredit, approveReconciliation, previewReceipt, previewReconciliation, recordReceipt, reverseReceipt, sendReceiptConfirmation } from "./actions";
-import { catchUpAccount, createAccount, mutateAccount, readAccounts } from "./store";
+import { catchUpAccount, createAccount, mutateAccount, readAccounts, setUnitMembership } from "./store";
 import { balances, chargesWithProjections, rentCoverage, today } from "./engine";
 import type { LedgerAccount, PaymentInput } from "./types";
 
@@ -69,5 +69,31 @@ describe("account workflow and retries", () => {
   it("audits an adjustment once without double counting its metadata", async () => {
     const a=await activate();await addAdjustment(form(a,{amount:"20.00",reason:"Agreed extra rent",date:today(),category:"rent"}));let saved=await current(a.id);expect(balances(saved).outstanding).toBe(9000);
     await addAdjustment(form(saved,{amount:"-10.00",reason:"Agreed allowance",date:today(),category:"rent"}));saved=await current(a.id);expect(balances(saved)).toMatchObject({outstanding:8000,credit:1000});expect(saved.adjustments).toHaveLength(2);
+  });
+});
+
+
+describe("manual tenant unit assignment", () => {
+  it("assigns selected units without moving history and prevents duplicate ownership", async () => {
+    const left=await draft(),right=await draft();
+    await setUnitMembership(left.id,["manual-unit"],left.version,"admin","Chosen by administrator");
+    const saved=await current(left.id);
+    expect(saved.unitIds).toEqual(["manual-unit"]);
+    expect(saved.migration).toEqual(left.migration);
+    expect(saved.payments).toEqual(left.payments);
+    expect(saved.charges).toEqual(left.charges);
+    await expect(setUnitMembership(right.id,["manual-unit"],right.version,"admin","Duplicate")).rejects.toThrow(/already belongs/);
+    await setUnitMembership(left.id,[],saved.version,"admin","Unassign");
+    await setUnitMembership(right.id,["manual-unit"],right.version,"admin","Assign");
+    expect((await current(right.id)).unitIds).toEqual(["manual-unit"]);
+  });
+  it("revokes old portal credentials when the selected units change", async () => {
+    const a=await draft();
+    await mutateAccount(a.id,account=>{account.unitIds=["old-unit"];account.portalEnabled=true;account.portalToken="old-token";account.portalScope=[{unitId:"old-unit",tenancy:"t"}];account.portalGrants=[{id:"g",unitId:"old-unit",tokenHash:"h",tenancy:"t",billIds:[],linkedAt:"",actor:"admin"}];});
+    const before=await current(a.id);
+    await setUnitMembership(a.id,["new-unit"],before.version,"admin","Corrected assignment");
+    const saved=await current(a.id);
+    expect(saved.portalEnabled).toBe(false);expect(saved.portalToken).toBeUndefined();expect(saved.portalScope).toBeUndefined();expect(saved.portalGrants![0].revokedAt).toBeTruthy();
+    expect(saved.audit.at(-1)?.detail).toMatchObject({before:["old-unit"],after:["new-unit"],portalAccessRevoked:true});
   });
 });

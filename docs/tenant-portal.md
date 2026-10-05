@@ -48,3 +48,9 @@ Access resolves to an account-scoped principal with a private-link authenticatio
 Automated tests cover account isolation, ambiguous mappings, old/new tenancy tokens, grant revocation and replacement, approved electricity history, forged query targets, admin-only status changes, unread counts, reply idempotency, reconciliation retries, missing historical rates, rate changes, partial coverage, payment reversals and the £65/£70 cutover.
 
 Browser verification uses an isolated in-memory demo with database and real SMS disabled. Before production rollout, verify persistence and concurrent row-lock behaviour against staging MariaDB and test home-screen installation on actual iOS/Android devices. No live tenant links or financial data should be used for test submissions.
+
+## Manual tenant and unit setup
+
+Rent → Accounts now starts with a tenant-name list. Add a tenant by name, expand **Assign units**, select their units and save. Contact details are optional. Open their rent account to enter rates and reconcile balances. Unit assignment never moves rent transactions or automatically approves electricity history.
+
+New imported drafts retain source unit records in their archive but have no assigned units. On upgrade, a one-time transaction releases inferred unit links only on imported review accounts with no financial entries, approval, explicit unit-assignment audit or enabled/confirmed portal access. The before/after assignment is audited. Activated accounts and confirmed relationships remain intact. To correct those, use **Change assigned units** yourself; changing membership revokes portal entry links and requires fresh approval.
