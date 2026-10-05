@@ -1,3 +1,4 @@
+import { accountPath, findRouteAccount } from "@/lib/rent-ledger/links";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui";
@@ -29,9 +30,9 @@ function ScheduleForm({ account, schedule }: { account: LedgerAccount; schedule?
   </div>{live && <p className="text-sm text-mutedText">Live schedule rules and posted periods are locked. To change frequency or timing, end this schedule and add a new one. Use dated rates below for increases.</p>}<button className={button}>Save schedule</button></ActionForm>;
 }
 export default async function AccountPage({ params }: { params: { accountId: string } }) {
-  const accounts = await getLedgerAccounts(); const a = accounts.find(a => a.id === params.accountId); if (!a) notFound();
+  const accounts = await getLedgerAccounts(); const a = findRouteAccount(accounts, params.accountId); if (!a) notFound();
   const data = await getAppData(); const linked = data.units.filter(u => a.unitIds.includes(u.id));
-  return <div className="space-y-6"><PageHeader title={a.name} eyebrow={`Rent account · ${a.state}`} action={a.state !== "review" ? <Link className={button} href={`/admin/rent/accounts/${encodeURIComponent(a.id)}/payment`}>Record payment / apply credit</Link> : undefined} />
+  return <div className="space-y-6"><PageHeader title={a.name} eyebrow={`Rent account · ${a.state}`} action={a.state !== "review" ? <Link className={button} href={`${accountPath(a.id)}/payment`}>Record payment / apply credit</Link> : undefined} />
     <p>Units: {linked.map(u => u.unitReference).join(", ") || "No units attached (standalone account)"}</p>
     {a.state !== "review" && <BalanceCards account={a} />}
     <ActionForm action={saveAccountDetails} className={card}><AccountFields account={a} /><h2 className="text-xl font-black">Account contact</h2><div className="grid gap-3 md:grid-cols-2">{([['name','Account name'],['contactName','Contact name'],['mobile','Mobile for receipts'],['email','Email']] as const).map(([name,label]) => <label key={name}>{label}<input className={field} name={name} defaultValue={a[name]} required={name === "name"} /></label>)}</div><button className={button}>Save account contact</button></ActionForm>
