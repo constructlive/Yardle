@@ -27,7 +27,7 @@ export function SecureBillLinkControls({ unitId, secureUrl, enabled, email }: { 
     });
   }
 
-  return <div className="grid gap-3">
+  return <div className="grid gap-3"><p className="rounded-xl border border-amber-500/30 p-3 text-sm">Private link: anyone holding or receiving a forwarded link can view these bills and, when authorised, the linked tenant account. Check the recipient before copying or sending it.</p>
     <div className="flex min-w-0 gap-2 rounded-2xl border border-slateLine bg-[#121416] p-2"><input readOnly value={secureUrl} aria-label="Secure bill link" className="min-w-0 flex-1 bg-transparent px-3 text-sm font-bold text-secondaryText outline-none" /><button type="button" onClick={copyLink} disabled={!enabled} className={buttonClass}><Copy className="h-5 w-5" />{copied ? "Copied" : "Copy link"}</button></div>
     <div className="flex flex-wrap gap-3">
       <button type="submit" formAction={regenerateTenantBillLink} className={buttonClass}><RotateCcw className="h-5 w-5" />Regenerate link</button>

@@ -6,8 +6,8 @@ import { formatMoney } from "@/lib/money";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Rent statement | Yardle", robots: { index: false, follow: false }, referrer: "no-referrer" };
 export default async function Statement({ params }: { params: { token: string } }) {
-  if (!/^[a-f0-9]{64}$/.test(params.token)) notFound();
-  const a = await getPortalAccount(params.token); if (!a) notFound();
+
+  const a = await getPortalAccount(params.token); if (!a || a.state === "review") notFound();
   const rows = [
     ...a.charges.filter(c => !c.cancelled && c.dueDate <= today()).map(c => ({ id: c.id, date: c.dueDate, label: `${c.description}${c.periodStart ? ` (${c.periodStart} to ${c.periodEnd})` : ""}`, debit: c.amountPence, credit: 0 })),
     ...a.payments.filter(p => p.receivedDate <= today()).flatMap(p => [{ id: p.id, date: p.receivedDate, label: `Receipt: ${p.reference || p.method}`, debit: 0, credit: p.amountPence }, ...(p.reversedAt ? [{ id: `${p.id}:reversal`, date: p.reversedAt.slice(0,10), label: `Reversal: ${p.reversalReason}`, debit: p.amountPence, credit: 0 }] : [])])

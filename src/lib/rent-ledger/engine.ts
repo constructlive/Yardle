@@ -64,6 +64,7 @@ export function projectCharges(account: LedgerAccount, throughDate = today(), fi
         // Rate changes always split on their exact date. Full-period billing only
         // changes the divisor for a clipped cycle; the rate segments remain dated.
         const divisor = s.partialRule === "full" ? daysBetween(periodStart, periodEnd) + 1 : denominator;
+        if (s.partialRule === "full") for (const segment of calculation) segment.denominator = divisor;
         const amountPence = Math.round(calculation.reduce((sum, c) => sum + c.ratePence * c.days / divisor, 0));
         const dueDate = s.timing === "advance" ? periodStart : addDays(periodEnd, 1);
         result.push({ id: `schedule:${s.id}:${start}`, accountId: account.id, sourceId: s.id, category: s.kind, description: s.name, periodStart, periodEnd, dueDate, amountPence, coverageKnown: true, calculation });
@@ -121,7 +122,7 @@ export function rentCoverage(account: LedgerAccount) {
   if (!account.approval) return { through: undefined as string | undefined, fullyCovered: [] as Charge[] };
   const rent = account.charges.filter(c => c.category === "rent" && c.coverageKnown && !c.cancelled && c.periodStart && c.periodEnd);
   const settled = rent.filter(c => chargeRemaining(account, c) === 0);
-  const sourcesOn = (day: string) => account.schedules.filter(s => s.kind === "rent" && s.enabled && s.startDate <= day && (!s.endDate || s.endDate >= day));
+  const sourcesOn = (day: string) => account.schedules.filter(s => s.kind === "rent" && (s.enabled || rent.some(c => c.sourceId === s.id && c.periodStart! <= day && c.periodEnd! >= day)) && s.startDate <= day && (!s.endDate || s.endDate >= day));
   const dayCovered = (day: string) => {
     const sources = sourcesOn(day);
     return sources.length > 0 && sources.every(s => settled.some(c => c.sourceId === s.id && c.periodStart! <= day && c.periodEnd! >= day)) && !rent.some(c => c.periodStart! <= day && c.periodEnd! >= day && chargeRemaining(account, c) > 0);
@@ -131,12 +132,13 @@ export function rentCoverage(account: LedgerAccount) {
     for (let day = c.periodStart!; day <= c.periodEnd!; day = addDays(day, 1)) if (!dayCovered(day)) return false;
     return true;
   });
-  let cursor = account.approval.firstCoverageDate; let through: string | undefined;
+  const historicalThrough = account.reconciliation?.paidThrough && account.reconciliation.paidThrough < account.approval.firstCoverageDate ? account.reconciliation.paidThrough : undefined;
+  let cursor = historicalThrough ? addDays(historicalThrough, 1) : account.approval.firstCoverageDate; let through: string | undefined = historicalThrough;
   const last = rent.map(c => c.periodEnd!).sort().at(-1);
   let steps = 0;
   while (last && cursor <= last && ++steps < 40000) {
     const sources = sourcesOn(cursor);
-    if (!sources.length) { cursor = addDays(cursor, 1); continue; }
+    if (!sources.length) { if (cursor < account.approval.firstCoverageDate) break; cursor = addDays(cursor, 1); continue; }
     if (!dayCovered(cursor)) break;
     through = cursor; cursor = addDays(cursor, 1);
   }

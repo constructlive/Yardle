@@ -1,5 +1,5 @@
 import { RentError } from "./errors";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { ensureSeeded, hasDatabaseUrl, query, transaction } from "../db";
 import { getAppData } from "../data";
 import { migrationDrafts } from "./migrate";
@@ -86,10 +86,8 @@ export async function catchUpAll() {
 }
 export async function getLedgerAccounts() { await catchUpAll(); return readAccounts(); }
 export async function getPortalAccount(token: string) {
-  if (!/^[a-f0-9]{64}$/.test(token)) return undefined;
-  const matches = (a: LedgerAccount) => a.portalEnabled && a.state !== "review" && a.portalToken?.length === token.length && timingSafeEqual(Buffer.from(a.portalToken), Buffer.from(token));
-  const found = (await readAccounts()).find(matches); if (!found) return undefined;
-  return mutateAccount(found.id, a => { if (!matches(a)) return undefined; catchUpAccount(a); return structuredClone(a); });
+  const { getTenantPortal } = await import("../tenant-portal/access");
+  return (await getTenantPortal(token))?.account;
 }
 export async function createAccount(account: LedgerAccount) {
   await initializeLedger();

@@ -108,6 +108,9 @@ export async function saveUnit(formData: FormData) {
   const unitId = text(formData.get("unitId"));
   const estateId = text(formData.get("estateId"));
   const tenantAccessEnabled = bool(formData.get("tenantAccessEnabled"));
+  const previousUnit = unitId ? (await getAppData()).units.find(u => u.id === unitId) : undefined;
+  const tenancyChanged = previousUnit && (["tenantName", "tenantContactName", "tenantEmail", "tenantMobile", "status"] as const).some(key => previousUnit[key] !== text(formData.get(key)));
+  const replacementToken = tenancyChanged ? createTenantAccessToken() : undefined;
   const tenantNotes = serializeTenantMeta({
     notes: text(formData.get("notes")),
     billingAddress: text(formData.get("billingAddress")),
@@ -131,14 +134,14 @@ export async function saveUnit(formData: FormData) {
     tenantAccessEnabled
   ];
   if (!hasDatabaseUrl()) {
-    saveDemoUnit(unitId, { estateId, unitReference: text(formData.get("unitReference")), tenantName: text(formData.get("tenantName")), tenantContactName: text(formData.get("tenantContactName")), tenantEmail: text(formData.get("tenantEmail")), tenantMobile: text(formData.get("tenantMobile")), status: text(formData.get("status")) as any, notes: tenantNotes, freeSupplyMeter: bool(formData.get("freeSupplyMeter")), customKwhRatePence: pence(formData.get("customKwhRate")) ?? undefined, customStandingChargePence: pence(formData.get("customStandingCharge")) ?? undefined, openingBalancePence: pence(formData.get("openingBalance")) ?? 0, currentBalancePence: pence(formData.get("currentBalance")) ?? 0, tenantAccessEnabled });
+    saveDemoUnit(unitId, { estateId, unitReference: text(formData.get("unitReference")), tenantName: text(formData.get("tenantName")), tenantContactName: text(formData.get("tenantContactName")), tenantEmail: text(formData.get("tenantEmail")), tenantMobile: text(formData.get("tenantMobile")), status: text(formData.get("status")) as any, notes: tenantNotes, freeSupplyMeter: bool(formData.get("freeSupplyMeter")), customKwhRatePence: pence(formData.get("customKwhRate")) ?? undefined, customStandingChargePence: pence(formData.get("customStandingCharge")) ?? undefined, openingBalancePence: pence(formData.get("openingBalance")) ?? 0, currentBalancePence: pence(formData.get("currentBalance")) ?? 0, tenantAccessEnabled, ...(replacementToken ? { tenantAccessToken: replacementToken, tenantAccessTokenCreatedAt: new Date().toISOString() } : {}) });
     revalidatePath("/admin/units");
     return;
   }
   if (unitId) {
     await query(
-      `update units set estate_id=?, unit_reference=?, tenant_name=?, tenant_contact_name=?, tenant_email=?, tenant_mobile=?, status=?, notes=?, free_supply_meter=?, custom_kwh_rate_pence=?, custom_standing_charge_pence=?, opening_balance_pence=?, current_balance_pence=?, tenant_access_enabled=? where id=?`,
-      [...params, unitId]
+      `update units set estate_id=?, unit_reference=?, tenant_name=?, tenant_contact_name=?, tenant_email=?, tenant_mobile=?, status=?, notes=?, free_supply_meter=?, custom_kwh_rate_pence=?, custom_standing_charge_pence=?, opening_balance_pence=?, current_balance_pence=?, tenant_access_enabled=?, tenant_access_token=coalesce(?,tenant_access_token), tenant_access_token_created_at=if(? is null,tenant_access_token_created_at,utc_timestamp()) where id=?`,
+      [...params, replacementToken ?? null, replacementToken ?? null, unitId]
     );
   } else {
     await query(

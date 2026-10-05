@@ -1,3 +1,4 @@
+import { QuerySummary } from "@/components/tenant-portal/query-summary";
 import { DataTable, PageHeader, PrimaryButton, SecondaryButton, StatCard, StatusPill, Td, Th } from "@/components/ui";
 import { issueBills } from "@/lib/actions";
 import { getAppData } from "@/lib/data";
@@ -28,6 +29,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: {
 
   return <>
     <PageHeader title="Dashboard" eyebrow="Yardle Industrial Estate" action={<PrimaryButton href={withSelectedPeriod("/admin/readings", period?.id)}><Gauge className="h-5 w-5" />Enter readings</PrimaryButton>} />
+    <QuerySummary />
     {setupError ? <section className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-100 shadow-soft"><h2 className="text-xl font-black">Setup required</h2><p className="mt-2 text-sm font-bold text-red-200/80">{setupError}</p></section> : null}
     {!period ? <section className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 text-amber-100 shadow-soft"><h2 className="text-xl font-black">No current billing period</h2><p className="mt-2 text-sm font-bold text-amber-200/80">Create a billing period before entering meter readings or issuing bills.</p><div className="mt-4"><SecondaryButton href="/admin/periods">Open billing periods</SecondaryButton></div></section> : null}
     {units.length === 0 ? <section className="mb-6 rounded-2xl border border-slateLine bg-card p-5 shadow-soft"><h2 className="text-xl font-black text-ink">No units yet</h2><p className="mt-2 font-bold text-mutedText">Add estate units before taking readings or billing tenants.</p><div className="mt-4"><SecondaryButton href="/admin/units">Open units</SecondaryButton></div></section> : null}

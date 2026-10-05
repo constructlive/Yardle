@@ -22,6 +22,13 @@ export type Receipt = {
 };
 export type Adjustment = { id: string; accountId: string; category: Category; amountPence: number; date: string; reason: string; actor: string };
 export type AuditEvent = { id: string; at: string; actor: string; type: string; detail: unknown };
+export type PortalGrant = { id: string; unitId: string; tokenHash: string; tenancy: string; billIds: string[]; linkedAt: string; actor: string; revokedAt?: string };
+export type TenantQuery = {
+  id: string; requestId: string; subject: string; targetType: "bill" | "payment" | "electricity_payment"; targetId: string;
+  status: "Open" | "In progress" | "Resolved"; createdAt: string;
+  messages: { id: string; requestId: string; author: "tenant" | "admin"; text: string; at: string }[];
+  adminReadCount: number; tenantReadCount: number;
+};
 export type LedgerAccount = {
   id: string; name: string; contactName: string; mobile: string; email: string; unitIds: string[];
   schedules: Schedule[]; charges: Charge[]; payments: Receipt[]; adjustments: Adjustment[]; audit: AuditEvent[];
@@ -29,5 +36,10 @@ export type LedgerAccount = {
   migration: { importedAt: string; originalOpeningPence: number; suggestedOpeningPence: number; legacyThroughDate: string; warnings: string[]; snapshot: unknown };
   approval?: { actor: string; at: string; firstCoverageDate: string; confirmedOpeningPence: number; note: string };
   portalToken?: string; portalEnabled: boolean;
+  portalScope?: { unitId: string; tenancy: string }[];
+  portalGrants?: PortalGrant[];
+  tenantQueries?: TenantQuery[];
+  reconciliation?: { lastPaymentDate?: string; lastPaymentAmountPence?: number; coverageFrom?: string; paidThrough?: string; asOf: string; openingPence: number; calculatedPence?: number; reason: string; at: string; actor: string };
+  reconciliationRequests?: string[];
 };
 export type PaymentInput = { requestId: string; accountId: string; version: number; amountPence: number; receivedDate: string; method: string; reference: string; allocations: Allocation[] };

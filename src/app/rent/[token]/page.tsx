@@ -1,17 +1,5 @@
-import { notFound } from "next/navigation";
-import Link from "next/link";
-import { BalanceCards, ChargeTable, PaymentHistory, card } from "@/components/rent-ledger/views";
-import { RentCalendar } from "@/components/rent-ledger/calendar";
-import { getPortalAccount } from "@/lib/rent-ledger/store";
-import { getAppData } from "@/lib/data";
-import { formatMoney } from "@/lib/money";
-export const dynamic = "force-dynamic";
-export const metadata = { title: "Your rent account | Yardle", robots: { index: false, follow: false }, referrer: "no-referrer" };
-export default async function RentPortal({ params, searchParams }: { params: { token: string }; searchParams?: { month?: string } }) {
-  if (!/^[a-f0-9]{64}$/.test(params.token)) notFound();
-  const a = await getPortalAccount(params.token); if (!a) notFound();
-  const data = await getAppData(); const units = data.units.filter(u => a.unitIds.includes(u.id));
-  const electricity = units.reduce((n, u) => n + u.currentBalancePence, 0);
-  const bills = data.bills.filter(b => a.unitIds.includes(b.unitId) && b.issuedAt).sort((x,y) => (y.issuedAt || "").localeCompare(x.issuedAt || ""));
-  return <main className="mx-auto max-w-6xl space-y-6 p-5 text-ink"><header className={card}><p className="text-amber-200">Yardle · tenant account</p><h1 className="text-3xl font-black">{a.name}</h1><p>Units {units.map(u => u.unitReference).join(", ") || "—"}</p><Link className="underline" href={`/rent/${params.token}/statement`}>Open printable rent statement</Link></header><BalanceCards account={a} /><section className={card}><RentCalendar account={a} month={searchParams?.month} basePath={`/rent/${params.token}`} /></section><section className={card}><h2 className="text-xl font-black">Rent and service calendar</h2><ChargeTable account={a} /></section><section className={card}><h2 className="text-xl font-black">Payment history</h2><PaymentHistory account={a} /></section><section className={card}><h2 className="text-xl font-black">Agreed rent and service rates</h2>{a.schedules.map(s => <div key={s.id}><h3 className="font-bold">{s.name} · {s.frequency} · in {s.timing}</h3><p>Coverage starts {s.startDate}{s.endDate ? `, ends ${s.endDate}` : ""}.</p>{s.rates.map(r => <p key={r.effectiveDate}>From {r.effectiveDate}: {formatMoney(r.amountPence)} per cycle</p>)}</div>)}</section><section className={card}><h2 className="text-xl font-black">Electricity — separate balance</h2><p>Current electricity balance: <b>{formatMoney(electricity)}</b>. This is separate from the rent account above; rent payments do not settle electricity bills.</p><div className="overflow-auto"><table className="w-full text-left text-sm"><thead><tr>{["Unit","Period","Bill total","Paid","Remaining","Status"].map(h => <th className="p-3" key={h}>{h}</th>)}</tr></thead><tbody>{bills.map(b => <tr className="border-t border-slateLine" key={b.id}><td className="p-3">{units.find(u => u.id === b.unitId)?.unitReference}</td><td className="p-3">{data.billingPeriods.find(p => p.id === b.billingPeriodId)?.name}</td><td className="p-3">{formatMoney(b.roundedTotalPence)}</td><td className="p-3">{formatMoney(b.amountPaidPence)}</td><td className="p-3">{formatMoney(b.remainingBalancePence)}</td><td className="p-3">{b.paidStatus.replaceAll("_", " ")}</td></tr>)}</tbody></table></div><p className="text-sm text-mutedText">Historical electricity bill balances can include carried-forward amounts; do not add them together.</p></section></main>;
+import { redirect } from "next/navigation";
+export const dynamic="force-dynamic";
+export default async function RentPortal({params,searchParams}:{params:{token:string};searchParams:{month?:string}}) {
+  redirect(`/account/${encodeURIComponent(params.token)}?tab=rent${searchParams.month ? `&month=${encodeURIComponent(searchParams.month)}` : ""}`);
 }

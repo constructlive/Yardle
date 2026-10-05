@@ -1,7 +1,7 @@
 "use server";
 import { RentError } from "./errors";
 
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireAdminSession } from "../session";
 import { getSmsProvider } from "../sms";
@@ -172,11 +172,10 @@ export async function addManualCharge(f: FormData) {
   }, version(f)); refresh();
 }
 export async function enablePortal(f: FormData) {
-  const user = await requireAdminSession(); await mutateAccount(value(f, "accountId"), a => {
-    a.portalEnabled = f.get("enabled") === "on"; if (!a.portalToken || f.get("regenerate") === "on") a.portalToken = randomBytes(32).toString("hex"); audit(a, user.userId, "portal_access_changed", { enabled: a.portalEnabled });
-  }, version(f)); refresh();
+  const { savePortalAccess } = await import("../tenant-portal/actions");
+  const result = await savePortalAccess(f);
+  if (!result.ok) throw new RentError(result.error);
 }
-
 function applyCredit(a: LedgerAccount, input: PaymentInput, paymentId: string) {
   const p = a.payments.find(p => p.id === paymentId && !p.reversedAt && p.receivedDate <= today()); if (!p) throw new RentError("Available credit entry not found.");
   const available = p.amountPence - p.allocations.reduce((n, x) => n + x.amountPence, 0);

@@ -1,5 +1,7 @@
 # Account-owned rent ledger
 
+The current tenant portal and calendar-based reconciliation workflow are described in [the tenant portal guide](tenant-portal.md). It includes last-payment evidence, confirmed historical coverage, calculated opening balances and audited overrides. The sections below retain the original ledger and deployment background.
+
 ## First live entry (5 October 2026)
 
 Existing rent figures are unconfirmed. The first visit imports their account/unit grouping and an immutable source snapshot, but creates **no live charges or payments**. Accounts start in **Needs reconciliation**. Electricity is untouched.

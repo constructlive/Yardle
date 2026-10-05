@@ -19,6 +19,7 @@ const utilityLinks: NavLink[] = [
   ["Payments", "/admin/payments", CreditCard, "Payments"],
   ["Payment Checklist", "/admin/landlord", HandCoins, "Checklist"],
   ["Reporting", "/admin/reports", BarChart3, "Reports"],
+  ["Tenant queries", "/admin/queries", MessageSquare, "Queries"],
   ["SMS", "/admin/sms", MessageSquare, "SMS"],
   ["Settings", "/admin/settings", Settings, "Settings"]
 ];
@@ -30,6 +31,7 @@ const rentLinks: NavLink[] = [
   ["Services", "/admin/rent/services", Landmark, "Services"],
   ["Rent Payments", "/admin/rent/payments", WalletCards, "Payments"],
   ["Arrears", "/admin/rent/arrears", CalendarClock, "Arrears"],
+  ["Tenant queries", "/admin/queries", MessageSquare, "Queries"],
   ["SMS", "/admin/sms", MessageSquare, "SMS"],
   ["Settings", "/admin/settings", Settings, "Settings"]
 ];
