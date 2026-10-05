@@ -1,3 +1,6 @@
+import { adminAppMetadata } from "@/lib/admin-pwa";
+import { AdminInstall } from "@/components/admin-install";
+export const metadata = adminAppMetadata;
 import { BrandLogo } from "@/components/brand-logo";
 import { loginAdmin } from "@/lib/auth-actions";
 import { SignInButton } from "./sign-in-button";
@@ -21,6 +24,7 @@ export default function LoginPage({ searchParams }: { searchParams: { error?: st
           <SignInButton />
         </form>
         <p className="mt-5 text-center text-xs font-bold text-mutedText">Admin access only. No public registration.</p>
+        <AdminInstall />
         <footer className="mt-8 flex justify-center border-t border-slateLine pt-4"><BrandLogo className="h-8 w-28 rounded-xl p-1" /></footer>
       </section>
     </main>

@@ -1,3 +1,5 @@
+import { adminAppMetadata } from "@/lib/admin-pwa";
+export const metadata = adminAppMetadata;
 import { AdminShell } from "@/components/app-shell";
 import { getAppData } from "@/lib/data";
 import { hasDatabaseUrl } from "@/lib/db";
