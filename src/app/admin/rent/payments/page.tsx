@@ -18,7 +18,7 @@ export default async function Payments() {
       id: account.id, unitIds: account.unitIds,
       search: [account.name, account.contactName, ...unitLabels].join(" ").toLocaleLowerCase(),
       content: <section className={card}>
-        <div className="flex flex-wrap items-center gap-4"><Link className="text-xl font-black text-amber-200" href={accountPath(account.id)}>{account.name}</Link>{account.state !== "review" && <Link className="underline" href={accountPath(account.id) + "/payment"}>Record payment</Link>}</div>
+        <div className="flex flex-wrap items-center gap-4"><Link className="text-xl font-black text-amber-200" href={accountPath(account.id)}>{account.name}</Link>{account.state !== "review" && <Link className="underline" href={accountPath(account.id) + "#rent-book"}>Open rent book / record payment</Link>}</div>
         <p className="text-sm text-secondaryText">{unitLabels.join(" · ") || "No unit assigned"}{account.contactName && account.contactName !== account.name ? " · " + account.contactName : ""}</p>
         <PaymentHistory account={account} />
       </section>,

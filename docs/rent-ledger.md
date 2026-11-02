@@ -28,6 +28,12 @@ Sign-off is version-checked and records the administrator, timestamp, cutover da
 - Ending a schedule inside an already posted period is rejected; end it at its posted boundary and use an adjustment for an agreed refund. Changing live frequency/timing uses an ended old schedule plus a new schedule.
 - Pausing stops posting, not contractual liability. Resuming catches up. To end rent liability, set the schedule end date.
 
+## Rent book
+
+Live account pages show a rent book before account settings. Rows follow actual rent periods (weekly, monthly or entered manual periods); rate supplements stay with the original period. Ticks require every charge on the row to be fully allocated. Reversed receipts and unallocated credit do not supply ticks, and unknown historical coverage is not inferred.
+
+Choose a month or show all periods, select one or several unpaid rows, then enter the amount, received date, method and reference. Review exact allocations before saving through the existing version-checked, retry-safe receipt action. Smaller payments cover selected periods in date order; excess remains credit. Existing credit, services and opening balances use the detailed payment screen. Rent SMS remains paused.
+
 ## Payments and statements
 
 Record payment captures account, amount, date received, method and reference. It offers oldest-unpaid suggestions, editable allocations and selected 2/6/12-week rent windows. Weekly windows select their individual charges; monthly charges remain whole charges if the chosen window overlaps them. The UI shows the actual dates and amounts before saving. Projection horizon is 90 days, covering 12 weeks from today.
