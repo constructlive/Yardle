@@ -1,4 +1,5 @@
 "use server";
+import { RENT_SMS_ENABLED } from "./sms-policy";
 import { RentError } from "./errors";
 
 import { randomUUID } from "node:crypto";
@@ -124,6 +125,7 @@ export async function reverseReceipt(f: FormData) {
 }
 export async function sendReceiptConfirmation(accountId: string, paymentId: string) {
   const user = await requireAdminSession();
+  if (!RENT_SMS_ENABLED) throw new RentError("Rent SMS messages are temporarily disabled.");
   const payload = await mutateAccount(accountId, a => {
     const p = a.payments.find(p => p.id === paymentId); const c = p?.confirmation;
     if (!p || p.reversedAt || !c) throw new RentError("Receipt is unavailable.");

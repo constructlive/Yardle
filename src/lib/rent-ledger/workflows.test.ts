@@ -49,12 +49,14 @@ describe("account workflow and retries", () => {
     expect(receipts[0].id).toBe(receipts[1].id);expect((await current(a.id)).payments).toHaveLength(1);
     await expect(recordReceipt({...p,requestId:randomUUID()})).rejects.toThrow("changed");await expect(recordReceipt({...p,amountPence:9999})).rejects.toThrow("retry key");
   });
-  it("keeps a saved payment after SMS failure and independently retries only SMS", async () => {
-    const a=await activate();const p=await recordReceipt(payment(a)); expect(p.confirmation?.mobile).toBe(a.mobile); expect(p.confirmation?.state).toBe("prepared");
-    providerSend.mockResolvedValueOnce({status:"failed",providerReference:"",failureReason:"Invalid destination"});await sendReceiptConfirmation(a.id,p.id);
-    expect((await current(a.id)).payments).toHaveLength(1); expect((await current(a.id)).payments[0].confirmation?.state).toBe("failed");
-    providerSend.mockResolvedValueOnce({status:"simulated",providerReference:"mock-1"});await sendReceiptConfirmation(a.id,p.id);expect((await current(a.id)).payments).toHaveLength(1);
-    await expect(sendReceiptConfirmation(a.id,p.id)).rejects.toThrow("already");
+  it("blocks rent SMS without changing the saved payment", async () => {
+    const a = await activate(); const p = await recordReceipt(payment(a));
+    const before = await current(a.id);
+    await expect(sendReceiptConfirmation(a.id, p.id)).rejects.toThrow("temporarily disabled");
+    expect(providerSend).not.toHaveBeenCalled();
+    expect(await current(a.id)).toEqual(before);
+    expect(before.payments).toHaveLength(1);
+    expect(before.payments[0].confirmation?.state).toBe("prepared");
   });
   it("reverses a receipt with actor and reason without deleting it", async () => {
     const a=await activate();const p=await recordReceipt(payment(a));const saved=await current(a.id);await reverseReceipt(form(saved,{paymentId:p.id,reason:"Entered twice by administrator"}));const reversed=await current(a.id);

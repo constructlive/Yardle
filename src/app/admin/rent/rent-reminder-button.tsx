@@ -1,4 +1,5 @@
 "use client";
+import { RENT_SMS_ENABLED } from "@/lib/rent-ledger/sms-policy";
 
 import { useMemo, useState, useTransition } from "react";
 import { BellRing, Send } from "lucide-react";
@@ -50,6 +51,7 @@ export function RentReminderButton({ unitId, unitReference, tenantName, mobile, 
     });
   }
 
+  if (!RENT_SMS_ENABLED) return null;
   return <>
     <button
       type="button"
