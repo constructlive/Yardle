@@ -5,7 +5,7 @@ import { accountPath } from "@/lib/rent-ledger/links";
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { approveReconciliation, previewReconciliation, allocateCredit, previewCredit, previewReceipt, recordReceipt, sendReceiptConfirmation } from "@/lib/rent-ledger/ui-actions";
-import { addDays, chargeRemaining, chargesWithProjections, money, suggestAllocation, today } from "@/lib/rent-ledger/engine";
+import { addDays, chargeRemaining, paymentCharges, money, suggestAllocation, today } from "@/lib/rent-ledger/engine";
 import type { LedgerAccount, PaymentInput, Receipt } from "@/lib/rent-ledger/types";
 import type { ActionResult } from "@/lib/rent-ledger/errors";
 import { formatMoney } from "@/lib/money";
@@ -38,7 +38,7 @@ export function ReconciliationForm({ account }: { account: LedgerAccount }) {
   </section>;
 }
 export function PaymentForm({ account }: { account: LedgerAccount }) {
-  const router = useRouter(); const charges = chargesWithProjections(account);
+  const router = useRouter(); const charges = paymentCharges(account);
   const [requestId] = useState(() => crypto.randomUUID()); const [amount, setAmount] = useState(""); const [receivedDate, setReceivedDate] = useState(today()); const [method, setMethod] = useState("bank_transfer"); const [reference, setReference] = useState(""); const [creditId, setCreditId] = useState("");
   const [from, setFrom] = useState(today()); const [weeks, setWeeks] = useState("2"); const [allocations, setAllocations] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<ReceiptPreview>(); const [receipt, setReceipt] = useState<Receipt>(); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [complete, setComplete] = useState(false);

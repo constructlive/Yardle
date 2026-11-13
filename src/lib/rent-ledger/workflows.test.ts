@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { removeRentAccount, addAdjustment, addRate, allocateCredit, approveReconciliation, previewReceipt, previewReconciliation, recordReceipt, reverseReceipt, sendReceiptConfirmation } from "./actions";
 import { archiveRentAccount, catchUpAccount, createAccount, mutateAccount, readAccounts, setUnitMembership } from "./store";
 import { balances, chargesWithProjections, rentCoverage, today } from "./engine";
+import { rentBookRows } from "./rent-book";
 import type { LedgerAccount, PaymentInput } from "./types";
 
 beforeAll(() => { vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-05T12:00:00Z")); });
@@ -25,6 +26,16 @@ function payment(a: LedgerAccount, amountPence = 7000): PaymentInput { return { 
 function form(a: LedgerAccount, fields: Record<string,string>) { const f = new FormData(); f.set("accountId",a.id); f.set("version",String(a.version)); for (const [k,v] of Object.entries(fields)) f.set(k,v); return f; }
 
 describe("account workflow and retries", () => {
+  it("shows and records rent paid beyond the old 90-day cutoff", async () => {
+    const account = await activate();
+    const row = rentBookRows(account).find(row => row.from === "2027-10-04")!;
+    expect(row.status).toBe("Upcoming");
+    const input = { ...payment(account), allocations: [{ chargeId: row.id, amountPence: 7000 }] };
+    const preview = await previewReceipt(input);
+    expect(preview.covered).toEqual(expect.arrayContaining([expect.objectContaining({ periodStart: row.from })]));
+    await recordReceipt(input);
+    expect(rentBookRows(await current(account.id)).find(item => item.id === row.id)?.status).toBe("Paid");
+  });
   it("previews opening balances without activation and requires sign-off", async () => {
     const a = await draft(); const input = { accountId:a.id, version:a.version, opening:"100.00",first:today(),note:"Agreed" };
     const preview = await previewReconciliation(input); expect(preview.balances).toMatchObject({ outstanding:17000,overdue:10000 });

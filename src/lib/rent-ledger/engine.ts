@@ -78,6 +78,9 @@ export function chargesWithProjections(account: LedgerAccount, horizon = addDays
   const existing = new Set(account.charges.map(c => c.id));
   return [...account.charges, ...projectCharges(account, horizon, firstCoverageDate).filter(c => !existing.has(c.id))].sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.id.localeCompare(b.id));
 }
+export function paymentCharges(account: LedgerAccount) {
+  return chargesWithProjections(account, addDays(today(), 730));
+}
 export function allocatedTo(account: LedgerAccount, chargeId: string, asOf?: string) {
   return account.payments.filter(p => !p.reversedAt && (!asOf || p.receivedDate <= asOf)).reduce((sum, p) => sum + p.allocations.filter(a => a.chargeId === chargeId).reduce((n, a) => n + a.amountPence, 0), 0);
 }

@@ -17,7 +17,8 @@ const displayDate = (value: string) => new Intl.DateTimeFormat("en-GB", { day: "
 export function RentBook({ account }: { account: LedgerAccount }) {
   const router = useRouter();
   const rows = rentBookRows(account);
-  const [month, setMonth] = useState(today().slice(0, 7));
+  const [month, setMonth] = useState("");
+  const [view, setView] = useState<"due" | "month" | "all">("due");
   const [selected, setSelected] = useState<string[]>([]);
   const [amount, setAmount] = useState("");
   const [receivedDate, setReceivedDate] = useState(today());
@@ -28,7 +29,13 @@ export function RentBook({ account }: { account: LedgerAccount }) {
   const [saved, setSaved] = useState("");
   const [preview, setPreview] = useState<{ input: PaymentInput; credit: number }>();
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
-  const visible = rows.filter(row => !month || (row.from.slice(0, 7) <= month && row.to.slice(0, 7) >= month));
+  const asOf = today();
+  const visible = rows.filter(row => {
+    if (view === "due") return row.remaining > 0 && row.due <= asOf;
+    if (view === "all") return true;
+    return row.from.slice(0, 7) <= month && row.to.slice(0, 7) >= month;
+  });
+  const selectable = visible.filter(row => row.remaining > 0);
   const chosen = rows.filter(row => selected.includes(row.id));
   const total = chosen.reduce((sum, row) => sum + row.remaining, 0);
 
@@ -62,7 +69,13 @@ export function RentBook({ account }: { account: LedgerAccount }) {
   return <section id="rent-book" className="space-y-4 rounded-2xl border border-slateLine bg-card p-5" aria-label="Rent book">
     <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-2xl font-black">Rent book</h2><p className="text-sm text-secondaryText">One line per rent period. A tick means that period is fully paid.</p></div><Link className="text-amber-200 underline" href={accountPath(account.id) + "/payment"}>Apply credit / other payment</Link></div>
     <fieldset disabled={busy} className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3"><label>Month<input type="month" className={field} value={month} onChange={event => { setMonth(event.target.value); choose([]); }} /></label><button type="button" className="min-h-11 underline" onClick={() => { setMonth(""); choose([]); }}>Show all periods</button><button type="button" className="min-h-11 text-amber-200 underline" onClick={() => choose(visible.filter(row => row.remaining > 0).map(row => row.id))}>Select unpaid periods shown</button>{selected.length > 0 && <button type="button" className="min-h-11 underline" onClick={() => choose([])}>Clear selection</button>}</div>
+      <div className="flex flex-wrap items-end gap-3">
+        <button type="button" className="min-h-11 underline aria-pressed:font-bold aria-pressed:text-amber-200" aria-pressed={view === "due"} onClick={() => { setView("due"); setMonth(""); }}>Rent due · oldest first</button>
+        <label>Browse by month<input type="month" className={field} value={month} onChange={event => { const nextMonth = event.target.value; setMonth(nextMonth); setView(nextMonth ? "month" : "due"); }} /></label>
+        <button type="button" className="min-h-11 underline aria-pressed:font-bold aria-pressed:text-amber-200" aria-pressed={view === "all"} onClick={() => { setView("all"); setMonth(""); }}>Show all periods</button>
+        {selectable.length > 0 && <button type="button" className="min-h-11 text-amber-200 underline" onClick={() => choose([...new Set([...selected, ...selectable.map(row => row.id)])])}>{view === "due" ? "Select all rent due" : "Select unpaid periods shown"}</button>}
+        {selected.length > 0 && <button type="button" className="min-h-11 underline" onClick={() => choose([])}>Clear selection</button>}
+      </div>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Rent periods, payments and remaining amounts</caption><thead><tr>{["Select", "Rent period", "Rent", "Paid", "Left to pay", "Status"].map(label => <th key={label} scope="col" className="p-3">{label}</th>)}</tr></thead><tbody>
         {visible.map(row => <tr key={row.id} className="border-t border-slateLine">
           <td className="p-3">{row.remaining > 0 ? <label className="flex min-h-11 min-w-11 items-center justify-center"><input type="checkbox" aria-label={"Select " + row.name + " from " + displayDate(row.from)} checked={selected.includes(row.id)} onChange={event => choose(event.target.checked ? [...selected, row.id] : selected.filter(id => id !== row.id))} /></label> : <span className="text-xl text-green-300" aria-label={row.status}>{row.status === "Paid" ? "✓" : "—"}</span>}</td>
@@ -70,7 +83,7 @@ export function RentBook({ account }: { account: LedgerAccount }) {
           <td className="p-3 tabular-nums">{formatMoney(row.amount)}</td><td className="p-3 tabular-nums">{formatMoney(row.paid)}</td><td className="p-3 tabular-nums">{formatMoney(row.remaining)}</td><td className={"p-3 font-bold " + (row.status === "Paid" ? "text-green-300" : row.status === "Unpaid" ? "text-amber-200" : "")}>{row.status === "Paid" ? "✓ Paid" : row.status}</td>
         </tr>)}
       </tbody></table></div>
-      {!visible.length && <p>No rent periods in this view. Try another month or show all periods. Manual rent periods appear once entered.</p>}
+      {!visible.length && <p>{view === "due" ? "No unpaid rent is due. Browse by month or show all periods to record an advance payment." : "No rent periods in this view. Scheduled rent is shown up to two years ahead or until the schedule ends. Manual rent periods appear once entered."}</p>}
       <p className="text-sm text-secondaryText">Earlier balances, services and electricity are separate. Existing credit only ticks a period once applied. Historical weeks without confirmed allocations are not marked paid.</p>
       {selected.length > 0 && <div className="space-y-4 border-t border-slateLine pt-4"><h3 className="text-lg font-bold">Record payment for {selected.length} selected {selected.length === 1 ? "period" : "periods"}</h3><p>Left to pay for selection: <b>{formatMoney(total)}</b>. A smaller payment covers the earliest selected periods first.</p>
         <div className="grid gap-3 sm:grid-cols-2"><label>Amount received (£)<input className={field} inputMode="decimal" value={amount} onChange={event => { setAmount(event.target.value); setPreview(undefined); }} /></label><label>Date received<input className={field} type="date" max={today()} value={receivedDate} onChange={event => { setReceivedDate(event.target.value); setPreview(undefined); }} /></label><label>Payment method<select className={field} value={method} onChange={event => { setMethod(event.target.value); setPreview(undefined); }}><option value="bank_transfer">Bank transfer</option><option value="cash">Cash</option><option value="card">Card</option><option value="other">Other</option></select></label><label>Reference (optional)<input className={field} value={reference} onChange={event => { setReference(event.target.value); setPreview(undefined); }} /></label></div>

@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdminSession } from "../session";
 import { getSmsProvider } from "../sms";
 import { getActiveSmsProviderName } from "../sms-logging";
-import { addDays, assertSchedule, balances, chargesWithProjections, coveredByAllocation, date, money, paymentMessage, previewPayment, projectCharges, today, validatePayment } from "./engine";
+import { addDays, assertSchedule, balances, chargesWithProjections, coveredByAllocation, date, money, paymentCharges, paymentMessage, previewPayment, projectCharges, today, validatePayment } from "./engine";
 import { archiveRentAccount, audit, catchUpAccount, createAccount, getLedgerAccounts, mutateAccount, readAccounts, setUnitMembership, setUpUnitRentAccount, groupExistingRentAccount } from "./store";
 import type { LedgerAccount, PaymentInput, Receipt, Schedule } from "./types";
 
@@ -96,7 +96,7 @@ export async function previewReceipt(input: PaymentInput) {
   await requireAdminSession(); const a = (await getLedgerAccounts()).find(a => a.id === input.accountId);
   if (!a || a.state === "review") throw new RentError("Sign off the account before recording live payments.");
   if (a.version !== input.version) throw new RentError("Account changed; refresh and preview again.");
-  const result = previewPayment(a, input, chargesWithProjections(a));
+  const result = previewPayment(a, input, paymentCharges(a));
   return { balances: result.balances, paidThrough: result.coverage.through, covered: coveredByAllocation(result.account, input.allocations), message: paymentMessage(result.account, result.account.payments.at(-1)!) };
 }
 export async function recordReceipt(input: PaymentInput) {
@@ -108,7 +108,7 @@ export async function recordReceipt(input: PaymentInput) {
       return existing;
     }
     if (a.state === "review" || a.version !== input.version) throw new RentError("Account changed or needs sign-off. Refresh and preview again.");
-    const charges = chargesWithProjections(a); validatePayment(a, input, charges);
+    const charges = paymentCharges(a); validatePayment(a, input, charges);
     const ids = new Set(a.charges.map(c => c.id)); a.charges.push(...charges.filter(c => !ids.has(c.id) && input.allocations.some(x => x.chargeId === c.id)));
     const p: Receipt = { ...input, id: randomUUID(), recordedBy: user.userId, createdAt: new Date().toISOString() };
     a.payments.push(p); p.confirmation = { mobile: a.mobile, message: paymentMessage(a, p), state: "prepared" }; audit(a, user.userId, "payment_received", p); return p;
@@ -182,7 +182,7 @@ function applyCredit(a: LedgerAccount, input: PaymentInput, paymentId: string) {
   const p = a.payments.find(p => p.id === paymentId && !p.reversedAt && p.receivedDate <= today()); if (!p) throw new RentError("Available credit entry not found.");
   const available = p.amountPence - p.allocations.reduce((n, x) => n + x.amountPence, 0);
   if (input.amountPence !== available) throw new RentError("Available credit changed. Refresh and review again.");
-  const charges = chargesWithProjections(a); validatePayment(a, input, charges);
+  const charges = paymentCharges(a); validatePayment(a, input, charges);
   const ids = new Set(a.charges.map(c => c.id)); a.charges.push(...charges.filter(c => !ids.has(c.id) && input.allocations.some(x => x.chargeId === c.id)));
   p.allocations.push(...input.allocations.map(x => ({ ...x })));
   // Multiple credit applications to one charge are combined for a single allocation record.

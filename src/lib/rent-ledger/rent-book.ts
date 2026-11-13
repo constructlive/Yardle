@@ -1,9 +1,9 @@
-import { chargeRemaining, chargesWithProjections, today } from "./engine";
+import { chargeRemaining, paymentCharges, today } from "./engine";
 import type { Charge, LedgerAccount } from "./types";
 
 /** Keep supplements with their original period so a tick covers the whole liability. */
 export function rentBookRows(account: LedgerAccount) {
-  const charges = chargesWithProjections(account).filter(c => !c.cancelled && c.category === "rent" && c.coverageKnown && c.periodStart && c.periodEnd);
+  const charges = paymentCharges(account).filter(c => !c.cancelled && c.category === "rent" && c.coverageKnown && c.periodStart && c.periodEnd);
   const groups = new Map<string, Charge[]>();
   for (const charge of charges) {
     const id = charge.baseChargeId || charge.id;

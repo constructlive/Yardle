@@ -36,7 +36,7 @@ Choose a month or show all periods, select one or several unpaid rows, then ente
 
 ## Payments and statements
 
-Record payment captures account, amount, date received, method and reference. It offers oldest-unpaid suggestions, editable allocations and selected 2/6/12-week rent windows. Weekly windows select their individual charges; monthly charges remain whole charges if the chosen window overlaps them. The UI shows the actual dates and amounts before saving. Projection horizon is 90 days, covering 12 weeks from today.
+Record payment captures account, amount, date received, method and reference. It offers oldest-unpaid suggestions, editable allocations and selected 2/6/12-week rent windows. Weekly windows select their individual charges; monthly charges remain whole charges if the chosen window overlaps them. The UI shows the actual dates and amounts before saving. The rent book and payment screens allow allocation to projected periods up to 730 days ahead.
 
 Payment request IDs protect retries; optimistic account versions prevent stale allocations from winning a race. An unallocated receipt or opening/adjustment credit remains credit. The same screen can allocate that existing credit without creating a second receipt. Reversal preserves the receipt, releases allocations, and records actor/time/reason.
 
